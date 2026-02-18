@@ -1,7 +1,10 @@
-"""Commission calculation engine for rolling and losing commissions.
+"""Commission calculation engine with hierarchical waterfall distribution.
 
-Rolling: bet_amount × rate (per ancestor level)
-Losing: (bet_amount - win_amount) × rate (per ancestor level, only on user loss)
+Rolling: bet_amount x agent_rate (waterfall: each ancestor earns their_rate - child_rate)
+Losing: loss_amount x agent_rate (same waterfall logic, based on weekly net profit)
+
+Hierarchy: parent assigns rates to sub-agents; sub_agent_rate <= parent_rate.
+Each agent's commission = their_rate - rate_given_to_child_in_path.
 """
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,12 +13,56 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_user import AdminUser
-from app.models.commission import (
-    AgentCommissionOverride,
-    CommissionLedger,
-    CommissionPolicy,
-)
+from app.models.agent_commission_rate import AgentCommissionRate
+from app.models.commission import CommissionLedger, CommissionPolicy
 from app.services.tree_service import get_ancestors
+
+
+async def get_agent_rate(
+    session: AsyncSession,
+    agent_id: int,
+    game_category: str,
+    commission_type: str,
+) -> Decimal:
+    """Get an agent's commission rate for a specific game category and type."""
+    stmt = select(AgentCommissionRate).where(
+        and_(
+            AgentCommissionRate.agent_id == agent_id,
+            AgentCommissionRate.game_category == game_category,
+            AgentCommissionRate.commission_type == commission_type,
+        )
+    )
+    result = await session.execute(stmt)
+    rate_row = result.scalar_one_or_none()
+    return rate_row.rate if rate_row else Decimal("0")
+
+
+async def get_agent_rates_bulk(
+    session: AsyncSession,
+    agent_ids: list[int],
+    game_category: str,
+    commission_type: str,
+) -> dict[int, Decimal]:
+    """Batch fetch rates for multiple agents."""
+    if not agent_ids:
+        return {}
+    stmt = select(AgentCommissionRate).where(
+        and_(
+            AgentCommissionRate.agent_id.in_(agent_ids),
+            AgentCommissionRate.game_category == game_category,
+            AgentCommissionRate.commission_type == commission_type,
+        )
+    )
+    result = await session.execute(stmt)
+    rows = result.scalars().all()
+    return {r.agent_id: r.rate for r in rows}
+
+
+def _calc_amount(source: Decimal, rate_pct: Decimal) -> Decimal:
+    """Calculate commission: source x (rate / 100), rounded to 2 decimals."""
+    return (source * rate_pct / Decimal("100")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
 
 
 async def _find_policy(
@@ -23,9 +70,7 @@ async def _find_policy(
     commission_type: str,
     game_category: str,
 ) -> CommissionPolicy | None:
-    """Find the best matching active policy.
-    Priority: category-specific > generic (no category), higher priority first."""
-    # Try category-specific first
+    """Find active policy for reference (min_bet_amount check)."""
     stmt = (
         select(CommissionPolicy)
         .where(
@@ -41,7 +86,6 @@ async def _find_policy(
     if policy:
         return policy
 
-    # Fallback to generic (no category)
     stmt = (
         select(CommissionPolicy)
         .where(
@@ -56,33 +100,6 @@ async def _find_policy(
     return result.scalar_one_or_none()
 
 
-async def _get_override_rates(
-    session: AsyncSession,
-    agent_id: int,
-    policy_id: int,
-) -> dict[str, float] | None:
-    """Get agent-specific rate overrides for a policy."""
-    stmt = select(AgentCommissionOverride).where(
-        and_(
-            AgentCommissionOverride.admin_user_id == agent_id,
-            AgentCommissionOverride.policy_id == policy_id,
-            AgentCommissionOverride.active == True,
-        )
-    )
-    result = await session.execute(stmt)
-    override = result.scalar_one_or_none()
-    if override and override.custom_rates:
-        return override.custom_rates
-    return None
-
-
-def _calc_amount(source: Decimal, rate_pct: float) -> Decimal:
-    """Calculate commission: source × (rate / 100), rounded to 2 decimals."""
-    return (source * Decimal(str(rate_pct)) / Decimal("100")).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
-
-
 async def calculate_rolling_commission(
     session: AsyncSession,
     agent_id: int,
@@ -92,62 +109,74 @@ async def calculate_rolling_commission(
     round_id: str,
     game_code: str | None = None,
 ) -> list[CommissionLedger]:
-    """Calculate rolling commission for a bet event.
-    Distributes commission up the agent tree based on level_rates."""
+    """Calculate rolling commission using hierarchical waterfall.
+
+    For a bet by user under agent_id:
+    - Build chain: agent -> parent -> grandparent -> ... -> root
+    - Each agent earns: their_rate - next_child_in_path_rate
+    - Bottom agent (direct) earns their full rate
+    """
     policy = await _find_policy(session, "rolling", game_category)
-    if not policy:
+    if policy and bet_amount < policy.min_bet_amount:
         return []
 
-    if bet_amount < policy.min_bet_amount:
+    agent = await session.get(AdminUser, agent_id)
+    if not agent or agent.status != "active":
         return []
 
-    # Get the agent and their ancestors
     ancestors = await get_ancestors(session, agent_id)
 
-    # Build ancestor chain: level 1 = direct agent, level 2 = parent, etc.
-    chain = []
-    agent = await session.get(AdminUser, agent_id)
-    if agent and agent.status == "active":
-        chain.append({"user": agent, "level": 1})
+    # Build chain from bottom (direct agent) to top (root ancestor)
+    chain: list[AdminUser] = [agent]
     for anc in ancestors:
         if anc["user"].status == "active":
-            chain.append({"user": anc["user"], "level": anc["depth"] + 1})
+            chain.append(anc["user"])
+
+    if not chain:
+        return []
+
+    # Batch fetch all rates
+    all_ids = [a.id for a in chain]
+    rates_map = await get_agent_rates_bulk(session, all_ids, game_category, "rolling")
 
     entries = []
-    for item in chain:
-        level_key = str(item["level"])
-        agent_user = item["user"]
+    policy_id = policy.id if policy else 0
 
-        # Check override first
-        override_rates = await _get_override_rates(session, agent_user.id, policy.id)
-        rates = override_rates or policy.level_rates
-
-        rate = rates.get(level_key)
-        if rate is None or rate <= 0:
+    for i, agent_user in enumerate(chain):
+        my_rate = rates_map.get(agent_user.id, Decimal("0"))
+        if my_rate <= 0:
             continue
 
-        amount = _calc_amount(bet_amount, rate)
+        # Child rate = rate of the next agent below in the chain
+        child_rate = Decimal("0")
+        if i > 0:
+            child_rate = rates_map.get(chain[i - 1].id, Decimal("0"))
+
+        effective_rate = my_rate - child_rate
+        if effective_rate <= 0:
+            continue
+
+        amount = _calc_amount(bet_amount, effective_rate)
         if amount <= 0:
             continue
 
         entry = CommissionLedger(
             agent_id=agent_user.id,
             user_id=user_id,
-            policy_id=policy.id,
+            policy_id=policy_id,
             type="rolling",
-            level=item["level"],
+            level=i + 1,
             source_amount=bet_amount,
-            rate=Decimal(str(rate)),
+            rate=effective_rate,
             commission_amount=amount,
             status="pending",
             reference_type="bet",
             reference_id=round_id,
-            description=f"Rolling L{item['level']} {game_category} {game_code or ''}".strip(),
+            description=f"Rolling L{i+1} {game_category} {game_code or ''}".strip(),
         )
         session.add(entry)
         entries.append(entry)
 
-        # Update agent pending balance
         agent_user.pending_balance += amount
         session.add(agent_user)
 
@@ -164,58 +193,68 @@ async def calculate_losing_commission(
     round_id: str,
     game_code: str | None = None,
 ) -> list[CommissionLedger]:
-    """Calculate losing (죽장) commission for a game round result.
-    Only applies when user loses (bet > win). Commission based on loss amount."""
+    """Calculate losing (죽장) commission using hierarchical waterfall.
+
+    Only applies when user loses (bet > win).
+    Commission based on loss amount with waterfall distribution."""
     loss_amount = bet_amount - win_amount
     if loss_amount <= 0:
         return []
 
     policy = await _find_policy(session, "losing", game_category)
-    if not policy:
+    if policy and bet_amount < policy.min_bet_amount:
         return []
 
-    if bet_amount < policy.min_bet_amount:
+    agent = await session.get(AdminUser, agent_id)
+    if not agent or agent.status != "active":
         return []
 
     ancestors = await get_ancestors(session, agent_id)
 
-    chain = []
-    agent = await session.get(AdminUser, agent_id)
-    if agent and agent.status == "active":
-        chain.append({"user": agent, "level": 1})
+    chain: list[AdminUser] = [agent]
     for anc in ancestors:
         if anc["user"].status == "active":
-            chain.append({"user": anc["user"], "level": anc["depth"] + 1})
+            chain.append(anc["user"])
+
+    if not chain:
+        return []
+
+    all_ids = [a.id for a in chain]
+    rates_map = await get_agent_rates_bulk(session, all_ids, game_category, "losing")
 
     entries = []
-    for item in chain:
-        level_key = str(item["level"])
-        agent_user = item["user"]
+    policy_id = policy.id if policy else 0
 
-        override_rates = await _get_override_rates(session, agent_user.id, policy.id)
-        rates = override_rates or policy.level_rates
-
-        rate = rates.get(level_key)
-        if rate is None or rate <= 0:
+    for i, agent_user in enumerate(chain):
+        my_rate = rates_map.get(agent_user.id, Decimal("0"))
+        if my_rate <= 0:
             continue
 
-        amount = _calc_amount(loss_amount, rate)
+        child_rate = Decimal("0")
+        if i > 0:
+            child_rate = rates_map.get(chain[i - 1].id, Decimal("0"))
+
+        effective_rate = my_rate - child_rate
+        if effective_rate <= 0:
+            continue
+
+        amount = _calc_amount(loss_amount, effective_rate)
         if amount <= 0:
             continue
 
         entry = CommissionLedger(
             agent_id=agent_user.id,
             user_id=user_id,
-            policy_id=policy.id,
+            policy_id=policy_id,
             type="losing",
-            level=item["level"],
+            level=i + 1,
             source_amount=loss_amount,
-            rate=Decimal(str(rate)),
+            rate=effective_rate,
             commission_amount=amount,
             status="pending",
             reference_type="round_result",
             reference_id=round_id,
-            description=f"Losing L{item['level']} {game_category} {game_code or ''}".strip(),
+            description=f"Losing L{i+1} {game_category} {game_code or ''}".strip(),
         )
         session.add(entry)
         entries.append(entry)
@@ -224,3 +263,62 @@ async def calculate_losing_commission(
         session.add(agent_user)
 
     return entries
+
+
+async def validate_rate_against_parent(
+    session: AsyncSession,
+    agent_id: int,
+    game_category: str,
+    commission_type: str,
+    new_rate: Decimal,
+) -> tuple[bool, str]:
+    """Validate that new_rate <= parent's rate for the same category/type.
+    Returns (is_valid, error_message)."""
+    agent = await session.get(AdminUser, agent_id)
+    if not agent:
+        return False, "Agent not found"
+
+    if agent.parent_id is None:
+        # Root agent (super_admin) can set any rate
+        return True, ""
+
+    parent_rate = await get_agent_rate(
+        session, agent.parent_id, game_category, commission_type
+    )
+
+    if new_rate > parent_rate:
+        return False, (
+            f"Rate {new_rate}% exceeds parent rate {parent_rate}% "
+            f"for {game_category}/{commission_type}"
+        )
+
+    return True, ""
+
+
+async def validate_rate_against_children(
+    session: AsyncSession,
+    agent_id: int,
+    game_category: str,
+    commission_type: str,
+    new_rate: Decimal,
+) -> tuple[bool, str]:
+    """Validate that new_rate >= max(children's rates) for the same category/type.
+    If parent lowers their rate, children's rates must not exceed it."""
+    from app.services.tree_service import get_children
+
+    children = await get_children(session, agent_id)
+    if not children:
+        return True, ""
+
+    child_ids = [c.id for c in children]
+    rates_map = await get_agent_rates_bulk(session, child_ids, game_category, commission_type)
+
+    for child in children:
+        child_rate = rates_map.get(child.id, Decimal("0"))
+        if child_rate > new_rate:
+            return False, (
+                f"Cannot lower rate to {new_rate}%: child {child.username} "
+                f"has rate {child_rate}% for {game_category}/{commission_type}"
+            )
+
+    return True, ""

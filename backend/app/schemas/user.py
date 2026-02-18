@@ -37,8 +37,8 @@ class UserResponse(BaseModel):
     nickname: str | None = None
     color: str | None = None
     registration_ip: str | None = None
-    virtual_account_bank: str | None = None
-    virtual_account_number: str | None = None
+    deposit_address: str | None = None
+    deposit_network: str | None = None
     referrer_id: int | None
     referrer_username: str | None = None
     depth: int
@@ -94,29 +94,29 @@ class UserStatistics(BaseModel):
     deposit_withdrawal_diff: Decimal = Decimal("0")
 
 
-class BankAccountResponse(BaseModel):
+class WalletAddressResponse(BaseModel):
     id: int
-    bank_name: str
-    bank_code: str | None
-    account_number: str
-    holder_name: str
+    coin_type: str
+    network: str
+    address: str
+    label: str | None
     is_primary: bool
     status: str
 
 
-class BankAccountCreate(BaseModel):
-    bank_name: str
-    bank_code: str | None = None
-    account_number: str
-    holder_name: str
+class WalletAddressCreate(BaseModel):
+    coin_type: str = Field(max_length=20)
+    network: str = Field(max_length=20)
+    address: str = Field(max_length=255)
+    label: str | None = None
     is_primary: bool = False
 
 
-class BankAccountUpdate(BaseModel):
-    bank_name: str | None = None
-    bank_code: str | None = None
-    account_number: str | None = None
-    holder_name: str | None = None
+class WalletAddressUpdate(BaseModel):
+    coin_type: str | None = None
+    network: str | None = None
+    address: str | None = None
+    label: str | None = None
     is_primary: bool | None = None
     status: str | None = None
 
@@ -165,7 +165,7 @@ class PasswordSet(BaseModel):
 class UserDetailResponse(BaseModel):
     user: UserResponse
     statistics: UserStatistics
-    bank_accounts: list[BankAccountResponse]
+    wallet_addresses: list[WalletAddressResponse]
     betting_permissions: list[BettingPermissionResponse]
     null_betting_configs: list[NullBettingConfigResponse]
     game_rolling_rates: list[GameRollingRateResponse]

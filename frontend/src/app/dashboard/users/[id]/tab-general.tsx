@@ -11,32 +11,22 @@ import {
   updateBettingPermission,
   updateNullBettingConfig,
   updateGameRollingRate,
-  createBankAccount,
-  deleteBankAccount,
+  createWalletAddress,
+  deleteWalletAddress,
 } from '@/hooks/use-user-detail';
-import { Wallet, Star, TrendingUp, TrendingDown, Plus, Trash2, Save } from 'lucide-react';
+import { Plus, Trash2, Save, Copy, Pencil } from 'lucide-react';
+import AssetSection from './asset-section';
+import RollingRateSection from './rolling-rate-section';
+import BettingPermissionSection from './betting-permission-section';
 
 const GAME_CATEGORIES = ['casino', 'slot', 'holdem', 'sports', 'shooting', 'coin', 'minigame'];
 const GAME_LABELS: Record<string, string> = {
-  casino: '카지노',
-  slot: '슬롯',
-  holdem: '홀덤',
-  sports: '스포츠',
-  shooting: '슈팅',
-  coin: '코인',
-  minigame: '미니게임',
+  casino: '카지노', slot: '슬롯', holdem: '홀덤', sports: '스포츠',
+  shooting: '슈팅', coin: '코인', minigame: '미니게임',
 };
 
-const HOLDEM_PROVIDERS = ['revolution', 'skycity', 'wild'];
-const PROVIDER_LABELS: Record<string, string> = {
-  revolution: '레볼루션',
-  skycity: '스카이시티',
-  wild: '와일드',
-};
-
-function formatKRW(amount: number): string {
-  return '\u20A9' + Number(amount).toLocaleString('ko-KR');
-}
+const COIN_OPTIONS = ['USDT', 'TRX', 'ETH', 'BTC', 'BNB'];
+const NETWORK_OPTIONS = ['TRC20', 'ERC20', 'BEP20', 'BTC'];
 
 type Props = {
   detail: UserDetailData;
@@ -45,9 +35,8 @@ type Props = {
 };
 
 export default function TabGeneral({ detail, userId, onRefetch }: Props) {
-  const { user, statistics, bank_accounts, betting_permissions, null_betting_configs, game_rolling_rates } = detail;
+  const { user, statistics, wallet_addresses, betting_permissions, null_betting_configs, game_rolling_rates } = detail;
 
-  // Edit form
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({
     real_name: user.real_name || '',
@@ -59,9 +48,8 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
   });
   const [saving, setSaving] = useState(false);
 
-  // Bank account form
-  const [showBankForm, setShowBankForm] = useState(false);
-  const [bankForm, setBankForm] = useState({ bank_name: '', account_number: '', holder_name: '' });
+  const [showWalletForm, setShowWalletForm] = useState(false);
+  const [walletForm, setWalletForm] = useState({ coin_type: 'USDT', network: 'TRC20', address: '', label: '' });
 
   const handleSave = async () => {
     setSaving(true);
@@ -107,152 +95,54 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
     } catch { alert('롤링율 변경 실패'); }
   };
 
-  const handleAddBank = async () => {
-    if (!bankForm.bank_name || !bankForm.account_number || !bankForm.holder_name) {
-      alert('모든 필드를 입력하세요');
+  const handleAddWallet = async () => {
+    if (!walletForm.address) {
+      alert('지갑 주소를 입력하세요');
       return;
     }
     try {
-      await createBankAccount(userId, bankForm);
-      setBankForm({ bank_name: '', account_number: '', holder_name: '' });
-      setShowBankForm(false);
+      await createWalletAddress(userId, {
+        coin_type: walletForm.coin_type,
+        network: walletForm.network,
+        address: walletForm.address,
+        label: walletForm.label || undefined,
+      });
+      setWalletForm({ coin_type: 'USDT', network: 'TRC20', address: '', label: '' });
+      setShowWalletForm(false);
       onRefetch();
-    } catch { alert('계좌 추가 실패'); }
+    } catch { alert('지갑 추가 실패'); }
   };
 
-  const handleDeleteBank = async (accountId: number) => {
-    if (!confirm('이 계좌를 삭제하시겠습니까?')) return;
+  const handleDeleteWallet = async (walletId: number) => {
+    if (!confirm('이 지갑 주소를 삭제하시겠습니까?')) return;
     try {
-      await deleteBankAccount(userId, accountId);
+      await deleteWalletAddress(userId, walletId);
       onRefetch();
-    } catch { alert('계좌 삭제 실패'); }
+    } catch { alert('지갑 삭제 실패'); }
   };
 
-  const getPermission = (category: string) => {
-    return betting_permissions.find((p) => p.game_category === category)?.is_allowed ?? true;
-  };
-
-  const getNullBetting = (category: string) => {
-    return null_betting_configs.find((c) => c.game_category === category)?.every_n_bets ?? 0;
-  };
-
-  const getRollingRate = (category: string, provider?: string) => {
-    return game_rolling_rates.find(
-      (r) => r.game_category === category && (provider ? r.provider === provider : !r.provider)
-    )?.rolling_rate ?? 0;
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
   };
 
   return (
     <div className="space-y-6">
-      {/* Asset Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400"><Wallet className="h-4 w-4" />잔액</div>
-            <p className="text-2xl font-bold mt-1 text-blue-700 dark:text-blue-300">{formatKRW(user.balance)}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400"><Star className="h-4 w-4" />포인트</div>
-            <p className="text-2xl font-bold mt-1 text-purple-700 dark:text-purple-300">{formatKRW(user.points)}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400"><TrendingUp className="h-4 w-4" />총 입금액</div>
-            <p className="text-2xl font-bold mt-1 text-green-700 dark:text-green-300">{formatKRW(statistics.total_deposit)}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400"><TrendingDown className="h-4 w-4" />총 출금액</div>
-            <p className="text-2xl font-bold mt-1 text-red-700 dark:text-red-300">{formatKRW(statistics.total_withdrawal)}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <AssetSection
+        balance={user.balance}
+        points={user.points}
+        totalDeposit={statistics.total_deposit}
+        totalWithdrawal={statistics.total_withdrawal}
+      />
 
-      {/* Game Rolling Rates */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">게임별 롤링율 (%)</CardTitle></CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="pb-2 font-medium">게임</th>
-                  <th className="pb-2 font-medium text-center">롤링율 (%)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {GAME_CATEGORIES.map((cat) => (
-                  <tr key={cat}>
-                    <td className="py-2 font-medium">{GAME_LABELS[cat]}</td>
-                    <td className="py-2 text-center">
-                      {cat === 'holdem' ? (
-                        <div className="space-y-1">
-                          {HOLDEM_PROVIDERS.map((prov) => (
-                            <div key={prov} className="flex items-center justify-center gap-2">
-                              <span className="text-xs text-muted-foreground w-20 text-right">{PROVIDER_LABELS[prov]}</span>
-                              <Input
-                                type="number"
-                                className="w-20 h-7 text-center text-sm"
-                                step="0.1"
-                                min="0"
-                                max="100"
-                                defaultValue={getRollingRate(cat, prov)}
-                                onBlur={(e) => handleRollingRateChange(cat, e.target.value, prov)}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <Input
-                          type="number"
-                          className="w-20 h-7 text-center text-sm mx-auto"
-                          step="0.1"
-                          min="0"
-                          max="100"
-                          defaultValue={getRollingRate(cat)}
-                          onBlur={(e) => handleRollingRateChange(cat, e.target.value)}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      <RollingRateSection
+        rates={game_rolling_rates}
+        onRateChange={handleRollingRateChange}
+      />
 
-      {/* Betting Permissions */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">베팅 권한 설정</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {GAME_CATEGORIES.map((cat) => {
-              const allowed = getPermission(cat);
-              return (
-                <button
-                  key={cat}
-                  onClick={() => handleTogglePermission(cat, allowed)}
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-colors ${
-                    allowed
-                      ? 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950'
-                      : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950'
-                  }`}
-                >
-                  <span className="text-sm font-medium">{GAME_LABELS[cat]}</span>
-                  <Badge className={allowed ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'} variant="secondary">
-                    {allowed ? '허용' : '차단'}
-                  </Badge>
-                </button>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      <BettingPermissionSection
+        permissions={betting_permissions}
+        onToggle={handleTogglePermission}
+      />
 
       {/* Null Betting Config */}
       <Card>
@@ -260,18 +150,21 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
         <CardContent>
           <p className="text-xs text-muted-foreground mb-3">N회 베팅마다 1회 누락 (0 = 미적용, 하위 상속)</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {GAME_CATEGORIES.map((cat) => (
-              <div key={cat} className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">{GAME_LABELS[cat]}</label>
-                <Input
-                  type="number"
-                  className="h-8 text-sm"
-                  min="0"
-                  defaultValue={getNullBetting(cat)}
-                  onBlur={(e) => handleNullBettingChange(cat, e.target.value)}
-                />
-              </div>
-            ))}
+            {GAME_CATEGORIES.map((cat) => {
+              const val = null_betting_configs.find((c) => c.game_category === cat)?.every_n_bets ?? 0;
+              return (
+                <div key={cat} className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">{GAME_LABELS[cat]}</label>
+                  <Input
+                    type="number"
+                    className="h-8 text-sm"
+                    min="0"
+                    defaultValue={val}
+                    onBlur={(e) => handleNullBettingChange(cat, e.target.value)}
+                  />
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -282,7 +175,7 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
           <CardTitle className="text-base">신상 정보</CardTitle>
           {!editMode ? (
             <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
-              <Edit className="h-3.5 w-3.5 mr-1" />수정
+              <Pencil className="h-3.5 w-3.5 mr-1" />수정
             </Button>
           ) : (
             <div className="flex gap-2">
@@ -335,48 +228,82 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
         </CardContent>
       </Card>
 
-      {/* Bank Accounts */}
+      {/* Deposit Address */}
+      {user.deposit_address && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">입금 주소 (시스템 할당)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="p-3 rounded-lg border border-dashed bg-green-50 dark:bg-green-950/20">
+              <div className="flex items-center gap-2 mb-1">
+                <Badge variant="secondary" className="bg-green-100 text-green-800">{user.deposit_network || 'TRC20'}</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="text-sm font-mono break-all">{user.deposit_address}</code>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(user.deposit_address!)}>
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Wallet Addresses */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">출금 계좌 / 가상계좌</CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setShowBankForm(!showBankForm)}>
-            <Plus className="h-3.5 w-3.5 mr-1" />계좌 추가
+          <CardTitle className="text-base">출금 지갑 주소</CardTitle>
+          <Button variant="outline" size="sm" onClick={() => setShowWalletForm(!showWalletForm)}>
+            <Plus className="h-3.5 w-3.5 mr-1" />지갑 추가
           </Button>
         </CardHeader>
         <CardContent>
-          {user.virtual_account_bank && (
-            <div className="mb-4 p-3 rounded-lg border border-dashed">
-              <p className="text-xs font-medium text-muted-foreground mb-1">가상계좌</p>
-              <p className="text-sm">{user.virtual_account_bank} {user.virtual_account_number}</p>
-            </div>
-          )}
-          {showBankForm && (
+          {showWalletForm && (
             <div className="mb-4 p-3 rounded-lg border bg-muted/30 space-y-2">
-              <div className="grid grid-cols-3 gap-2">
-                <Input placeholder="은행명" className="h-8 text-sm" value={bankForm.bank_name} onChange={(e) => setBankForm({ ...bankForm, bank_name: e.target.value })} />
-                <Input placeholder="계좌번호" className="h-8 text-sm" value={bankForm.account_number} onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })} />
-                <Input placeholder="예금주" className="h-8 text-sm" value={bankForm.holder_name} onChange={(e) => setBankForm({ ...bankForm, holder_name: e.target.value })} />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <select
+                  className="h-8 rounded-md border px-2 text-sm bg-background"
+                  value={walletForm.coin_type}
+                  onChange={(e) => setWalletForm({ ...walletForm, coin_type: e.target.value })}
+                >
+                  {COIN_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select
+                  className="h-8 rounded-md border px-2 text-sm bg-background"
+                  value={walletForm.network}
+                  onChange={(e) => setWalletForm({ ...walletForm, network: e.target.value })}
+                >
+                  {NETWORK_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <Input placeholder="별칭 (선택)" className="h-8 text-sm" value={walletForm.label} onChange={(e) => setWalletForm({ ...walletForm, label: e.target.value })} />
               </div>
+              <Input placeholder="지갑 주소" className="h-8 text-sm font-mono" value={walletForm.address} onChange={(e) => setWalletForm({ ...walletForm, address: e.target.value })} />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleAddBank}>추가</Button>
-                <Button variant="outline" size="sm" onClick={() => setShowBankForm(false)}>취소</Button>
+                <Button size="sm" onClick={handleAddWallet}>추가</Button>
+                <Button variant="outline" size="sm" onClick={() => setShowWalletForm(false)}>취소</Button>
               </div>
             </div>
           )}
-          {bank_accounts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">등록된 출금 계좌가 없습니다</p>
+          {wallet_addresses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">등록된 출금 지갑이 없습니다</p>
           ) : (
             <div className="space-y-2">
-              {bank_accounts.map((acc) => (
-                <div key={acc.id} className="flex items-center justify-between p-3 rounded-lg border">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{acc.bank_name}</span>
-                      {acc.is_primary && <Badge className="bg-blue-100 text-blue-800" variant="secondary">대표</Badge>}
+              {wallet_addresses.map((w) => (
+                <div key={w.id} className="flex items-center justify-between p-3 rounded-lg border">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <Badge variant="outline" className="text-xs">{w.coin_type}</Badge>
+                      <Badge variant="secondary" className="text-xs">{w.network}</Badge>
+                      {w.label && <span className="text-xs text-muted-foreground">{w.label}</span>}
+                      {w.is_primary && <Badge className="bg-blue-100 text-blue-800" variant="secondary">대표</Badge>}
                     </div>
-                    <p className="text-sm text-muted-foreground">{acc.account_number} · {acc.holder_name}</p>
+                    <div className="flex items-center gap-1">
+                      <code className="text-xs font-mono text-muted-foreground truncate">{w.address}</code>
+                      <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => copyToClipboard(w.address)}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteBank(acc.id)}>
+                  <Button variant="ghost" size="icon" onClick={() => handleDeleteWallet(w.id)}>
                     <Trash2 className="h-4 w-4 text-red-500" />
                   </Button>
                 </div>
@@ -411,13 +338,5 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <div className="mt-0.5">{value}</div>
     </div>
-  );
-}
-
-function Edit({ className }: { className?: string }) {
-  return (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-    </svg>
   );
 }

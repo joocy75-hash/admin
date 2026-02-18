@@ -2,7 +2,7 @@
 
 import secrets
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,14 +14,14 @@ from app.database import get_session
 from app.api.deps import PermissionChecker
 from app.models.admin_user import AdminUser, AdminUserTree
 from app.models.user import User, UserTree
-from app.models.user_bank_account import UserBankAccount
+from app.models.user_wallet_address import UserWalletAddress
 from app.models.user_betting_permission import UserBettingPermission
 from app.models.user_null_betting_config import UserNullBettingConfig
 from app.models.user_game_rolling_rate import UserGameRollingRate
 from app.schemas.user import (
-    BankAccountCreate,
-    BankAccountResponse,
-    BankAccountUpdate,
+    WalletAddressCreate,
+    WalletAddressResponse,
+    WalletAddressUpdate,
     BettingPermissionResponse,
     BettingPermissionUpdate,
     BulkStatusUpdate,
@@ -48,6 +48,7 @@ from app.services.user_tree_service import (
     get_children,
 )
 from app.services.promotion_service import cascade_promotion_check
+from app.services import notification_service
 from app.utils.security import hash_password
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -68,8 +69,8 @@ async def _build_response(session: AsyncSession, user: User) -> UserResponse:
         nickname=user.nickname,
         color=user.color,
         registration_ip=user.registration_ip,
-        virtual_account_bank=user.virtual_account_bank,
-        virtual_account_number=user.virtual_account_number,
+        deposit_address=user.deposit_address,
+        deposit_network=user.deposit_network,
         referrer_id=user.referrer_id,
         referrer_username=referrer.username if referrer else None,
         depth=user.depth,
@@ -131,8 +132,8 @@ async def _build_response_batch(
             nickname=user.nickname,
             color=user.color,
             registration_ip=user.registration_ip,
-            virtual_account_bank=user.virtual_account_bank,
-            virtual_account_number=user.virtual_account_number,
+            deposit_address=user.deposit_address,
+            deposit_network=user.deposit_network,
             referrer_id=user.referrer_id,
             referrer_username=referrer_map.get(user.referrer_id) if user.referrer_id else None,
             depth=user.depth,
@@ -297,7 +298,7 @@ async def bulk_update_status(
         missing_ids = [uid for uid in body.user_ids if uid not in found_ids]
         raise HTTPException(status_code=404, detail=f"Users not found: {missing_ids}")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     updated_count = 0
     for user in users:
         if user.status != body.status:
@@ -359,6 +360,7 @@ async def create_user(
 
     await session.commit()
     await session.refresh(user)
+    notification_service.notify_new_user(user.username)
     return await _build_response(session, user)
 
 
@@ -390,7 +392,7 @@ async def update_user(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(user, field, value)
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
 
     session.add(user)
     await session.commit()
@@ -409,7 +411,7 @@ async def delete_user(
     await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
     user.status = "banned"
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     session.add(user)
     await session.commit()
 
@@ -435,16 +437,16 @@ async def get_user_detail(
         deposit_withdrawal_diff=user.total_deposit - user.total_withdrawal,
     )
 
-    bank_result = await session.execute(
-        select(UserBankAccount).where(UserBankAccount.user_id == user_id)
+    wallet_result = await session.execute(
+        select(UserWalletAddress).where(UserWalletAddress.user_id == user_id)
     )
-    bank_accounts = [
-        BankAccountResponse(
-            id=ba.id, bank_name=ba.bank_name, bank_code=ba.bank_code,
-            account_number=ba.account_number, holder_name=ba.holder_name,
-            is_primary=ba.is_primary, status=ba.status,
+    wallet_addresses = [
+        WalletAddressResponse(
+            id=w.id, coin_type=w.coin_type, network=w.network,
+            address=w.address, label=w.label,
+            is_primary=w.is_primary, status=w.status,
         )
-        for ba in bank_result.scalars().all()
+        for w in wallet_result.scalars().all()
     ]
 
     bp_result = await session.execute(
@@ -480,7 +482,7 @@ async def get_user_detail(
     return UserDetailResponse(
         user=user_resp,
         statistics=stats,
-        bank_accounts=bank_accounts,
+        wallet_addresses=wallet_addresses,
         betting_permissions=betting_perms,
         null_betting_configs=null_configs,
         game_rolling_rates=rolling_rates,
@@ -507,81 +509,81 @@ async def get_user_statistics(
     )
 
 
-# ─── Bank Accounts ────────────────────────────────────────────────
+# ─── Wallet Addresses ─────────────────────────────────────────────
 
-@router.get("/{user_id}/bank-accounts", response_model=list[BankAccountResponse])
-async def list_bank_accounts(
+@router.get("/{user_id}/wallet-addresses", response_model=list[WalletAddressResponse])
+async def list_wallet_addresses(
     user_id: int,
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.view")),
 ):
     await _get_user_or_404(session, user_id)
     result = await session.execute(
-        select(UserBankAccount).where(UserBankAccount.user_id == user_id)
+        select(UserWalletAddress).where(UserWalletAddress.user_id == user_id)
     )
     return [
-        BankAccountResponse(
-            id=ba.id, bank_name=ba.bank_name, bank_code=ba.bank_code,
-            account_number=ba.account_number, holder_name=ba.holder_name,
-            is_primary=ba.is_primary, status=ba.status,
+        WalletAddressResponse(
+            id=w.id, coin_type=w.coin_type, network=w.network,
+            address=w.address, label=w.label,
+            is_primary=w.is_primary, status=w.status,
         )
-        for ba in result.scalars().all()
+        for w in result.scalars().all()
     ]
 
 
 @router.post(
-    "/{user_id}/bank-accounts",
-    response_model=BankAccountResponse,
+    "/{user_id}/wallet-addresses",
+    response_model=WalletAddressResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_bank_account(
+async def create_wallet_address(
     user_id: int,
-    body: BankAccountCreate,
+    body: WalletAddressCreate,
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
     await _get_user_or_404(session, user_id)
 
     if body.is_primary:
-        stmt = select(UserBankAccount).where(
-            UserBankAccount.user_id == user_id, UserBankAccount.is_primary == True
+        stmt = select(UserWalletAddress).where(
+            UserWalletAddress.user_id == user_id, UserWalletAddress.is_primary == True
         )
         existing_primary = (await session.execute(stmt)).scalar_one_or_none()
         if existing_primary:
             existing_primary.is_primary = False
             session.add(existing_primary)
 
-    ba = UserBankAccount(user_id=user_id, **body.model_dump())
-    session.add(ba)
+    wallet = UserWalletAddress(user_id=user_id, **body.model_dump())
+    session.add(wallet)
     await session.commit()
-    await session.refresh(ba)
-    return BankAccountResponse(
-        id=ba.id, bank_name=ba.bank_name, bank_code=ba.bank_code,
-        account_number=ba.account_number, holder_name=ba.holder_name,
-        is_primary=ba.is_primary, status=ba.status,
+    await session.refresh(wallet)
+    return WalletAddressResponse(
+        id=wallet.id, coin_type=wallet.coin_type, network=wallet.network,
+        address=wallet.address, label=wallet.label,
+        is_primary=wallet.is_primary, status=wallet.status,
     )
 
 
-@router.put("/{user_id}/bank-accounts/{account_id}", response_model=BankAccountResponse)
-async def update_bank_account(
+@router.put("/{user_id}/wallet-addresses/{wallet_id}", response_model=WalletAddressResponse)
+async def update_wallet_address(
     user_id: int,
-    account_id: int,
-    body: BankAccountUpdate,
+    wallet_id: int,
+    body: WalletAddressUpdate,
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
     await _get_user_or_404(session, user_id)
-    ba = await session.get(UserBankAccount, account_id)
-    if not ba or ba.user_id != user_id:
-        raise HTTPException(status_code=404, detail="Bank account not found")
+    wallet = await session.get(UserWalletAddress, wallet_id)
+    if not wallet or wallet.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Wallet address not found")
 
     update_data = body.model_dump(exclude_unset=True)
 
     if update_data.get("is_primary"):
-        stmt = select(UserBankAccount).where(
-            UserBankAccount.user_id == user_id,
-            UserBankAccount.is_primary == True,
-            UserBankAccount.id != account_id,
+        stmt = select(UserWalletAddress).where(
+            UserWalletAddress.user_id == user_id,
+            UserWalletAddress.is_primary == True,
+            UserWalletAddress.id != wallet_id,
         )
         existing_primary = (await session.execute(stmt)).scalar_one_or_none()
         if existing_primary:
@@ -589,33 +591,33 @@ async def update_bank_account(
             session.add(existing_primary)
 
     for field, value in update_data.items():
-        setattr(ba, field, value)
-    ba.updated_at = datetime.utcnow()
-    session.add(ba)
+        setattr(wallet, field, value)
+    wallet.updated_at = datetime.now(timezone.utc)
+    session.add(wallet)
     await session.commit()
-    await session.refresh(ba)
-    return BankAccountResponse(
-        id=ba.id, bank_name=ba.bank_name, bank_code=ba.bank_code,
-        account_number=ba.account_number, holder_name=ba.holder_name,
-        is_primary=ba.is_primary, status=ba.status,
+    await session.refresh(wallet)
+    return WalletAddressResponse(
+        id=wallet.id, coin_type=wallet.coin_type, network=wallet.network,
+        address=wallet.address, label=wallet.label,
+        is_primary=wallet.is_primary, status=wallet.status,
     )
 
 
 @router.delete(
-    "/{user_id}/bank-accounts/{account_id}",
+    "/{user_id}/wallet-addresses/{wallet_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_bank_account(
+async def delete_wallet_address(
     user_id: int,
-    account_id: int,
+    wallet_id: int,
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
     await _get_user_or_404(session, user_id)
-    ba = await session.get(UserBankAccount, account_id)
-    if not ba or ba.user_id != user_id:
-        raise HTTPException(status_code=404, detail="Bank account not found")
-    await session.delete(ba)
+    wallet = await session.get(UserWalletAddress, wallet_id)
+    if not wallet or wallet.user_id != user_id:
+        raise HTTPException(status_code=404, detail="Wallet address not found")
+    await session.delete(wallet)
     await session.commit()
 
 
@@ -638,7 +640,7 @@ async def update_betting_permissions(
         existing = (await session.execute(stmt)).scalar_one_or_none()
         if existing:
             existing.is_allowed = item.is_allowed
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
             session.add(existing)
         else:
             bp = UserBettingPermission(
@@ -679,7 +681,7 @@ async def update_null_betting(
         if existing:
             existing.every_n_bets = item.every_n_bets
             existing.inherit_to_children = item.inherit_to_children
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
             session.add(existing)
         else:
             nbc = UserNullBettingConfig(
@@ -724,7 +726,7 @@ async def update_rolling_rates(
         existing = (await session.execute(stmt)).scalar_one_or_none()
         if existing:
             existing.rolling_rate = item.rolling_rate
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
             session.add(existing)
         else:
             grr = UserGameRollingRate(
@@ -761,7 +763,7 @@ async def reset_password(
     chars = string.ascii_letters + string.digits
     temp_password = ''.join(secrets.choice(chars) for _ in range(8))
     user.password_hash = hash_password(temp_password)
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     session.add(user)
     await session.commit()
     return {"temporary_password": temp_password}
@@ -776,7 +778,7 @@ async def set_password(
 ):
     user = await _get_user_or_404(session, user_id)
     user.password_hash = hash_password(body.new_password)
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     session.add(user)
     await session.commit()
 
@@ -791,7 +793,7 @@ async def suspend_user(
 ):
     user = await _get_user_or_404(session, user_id)
     user.status = "suspended"
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     session.add(user)
     await session.commit()
     await session.refresh(user)

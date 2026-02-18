@@ -19,12 +19,11 @@ router = APIRouter(prefix="/audit", tags=["audit"])
 EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
-async def _build_log_response(session: AsyncSession, log: AuditLog) -> AuditLogResponse:
-    admin_user = await session.get(AdminUser, log.admin_user_id) if log.admin_user_id else None
+def _build_log_response(log: AuditLog, admin_username: str | None) -> AuditLogResponse:
     return AuditLogResponse(
         id=log.id,
         admin_user_id=log.admin_user_id,
-        admin_username=admin_user.username if admin_user else None,
+        admin_username=admin_username,
         ip_address=log.ip_address,
         user_agent=log.user_agent,
         action=log.action,
@@ -36,6 +35,17 @@ async def _build_log_response(session: AsyncSession, log: AuditLog) -> AuditLogR
         description=log.description,
         created_at=log.created_at,
     )
+
+
+async def _batch_admin_usernames(session: AsyncSession, logs: list[AuditLog]) -> dict[int, str]:
+    """Batch-load admin usernames for a list of audit logs."""
+    admin_ids = {log.admin_user_id for log in logs if log.admin_user_id}
+    if not admin_ids:
+        return {}
+    result = await session.execute(
+        select(AdminUser.id, AdminUser.username).where(AdminUser.id.in_(admin_ids))
+    )
+    return {row[0]: row[1] for row in result.all()}
 
 
 def _parse_dates(start_date: str | None, end_date: str | None) -> tuple[datetime | None, datetime | None]:
@@ -100,7 +110,8 @@ async def list_audit_logs(
     result = await session.execute(stmt)
     logs = result.scalars().all()
 
-    items = [await _build_log_response(session, log) for log in logs]
+    username_map = await _batch_admin_usernames(session, logs)
+    items = [_build_log_response(log, username_map.get(log.admin_user_id)) for log in logs]
     return AuditLogListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -157,11 +168,12 @@ async def export_audit_logs(
         cell = ws.cell(row=1, column=col, value=header)
         cell.font = Font(bold=True)
 
+    username_map = await _batch_admin_usernames(session, logs)
+
     for row_idx, log in enumerate(logs, 2):
-        admin_user = await session.get(AdminUser, log.admin_user_id) if log.admin_user_id else None
         ws.cell(row=row_idx, column=1, value=log.id)
         ws.cell(row=row_idx, column=2, value=log.admin_user_id)
-        ws.cell(row=row_idx, column=3, value=admin_user.username if admin_user else "")
+        ws.cell(row=row_idx, column=3, value=username_map.get(log.admin_user_id, ""))
         ws.cell(row=row_idx, column=4, value=log.action)
         ws.cell(row=row_idx, column=5, value=log.module)
         ws.cell(row=row_idx, column=6, value=log.resource_type)
@@ -199,4 +211,5 @@ async def get_audit_log(
     log = await session.get(AuditLog, log_id)
     if not log:
         raise HTTPException(status_code=404, detail="Audit log not found")
-    return await _build_log_response(session, log)
+    username_map = await _batch_admin_usernames(session, [log])
+    return _build_log_response(log, username_map.get(log.admin_user_id))

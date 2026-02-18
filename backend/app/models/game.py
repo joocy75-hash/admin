@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlmodel import Field, SQLModel
 
@@ -14,8 +15,8 @@ class GameProvider(SQLModel, table=True):
     api_key: str | None = Field(default=None, max_length=255)
     is_active: bool = Field(default=True, index=True)
     description: str | None = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Game(SQLModel, table=True):
@@ -29,8 +30,8 @@ class Game(SQLModel, table=True):
     is_active: bool = Field(default=True, index=True)
     sort_order: int = Field(default=0)
     thumbnail_url: str | None = Field(default=None, max_length=500)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class GameRound(SQLModel, table=True):
@@ -38,13 +39,13 @@ class GameRound(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     game_id: int = Field(foreign_key="games.id", index=True)
-    user_id: int = Field(index=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
     round_id: str = Field(max_length=100, unique=True, index=True)
 
-    bet_amount: float = Field(default=0)
-    win_amount: float = Field(default=0)
+    bet_amount: Decimal = Field(default=Decimal("0"), max_digits=18, decimal_places=2)
+    win_amount: Decimal = Field(default=Decimal("0"), max_digits=18, decimal_places=2)
     result: str = Field(max_length=20)  # win, lose, draw, push
 
     started_at: datetime | None = Field(default=None)
     ended_at: datetime | None = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

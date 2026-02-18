@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
@@ -13,4 +13,4 @@ class UserNullBettingConfig(SQLModel, table=True):
     game_category: str = Field(max_length=30)
     every_n_bets: int = Field(default=0)
     inherit_to_children: bool = Field(default=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -6,12 +6,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useUserTree } from '@/hooks/use-users';
 import type { UserDetailData } from '@/hooks/use-user-detail';
 import { Users, Link, UserX } from 'lucide-react';
+import { formatAmount } from '@/lib/utils';
 
 const RANK_LABELS: Record<string, string> = {
   sub_hq: '부본사', distributor: '총판', agency: '대리점',
 };
-
-function formatKRW(n: number) { return '\u20A9' + Number(n).toLocaleString('ko-KR'); }
 
 type Props = {
   userId: number;
@@ -118,8 +117,8 @@ export default function TabReferral({ userId, detail }: Props) {
                           {child.status === 'active' ? '활성' : '정지'}
                         </Badge>
                       </td>
-                      <td className="px-4 py-2 text-right font-mono">{formatKRW(child.balance)}</td>
-                      <td className="px-4 py-2 text-right font-mono">{formatKRW(child.points)}</td>
+                      <td className="px-4 py-2 text-right font-mono">{formatAmount(child.balance)}</td>
+                      <td className="px-4 py-2 text-right font-mono">{formatAmount(child.points)}</td>
                     </tr>
                   ))}
                 </tbody>

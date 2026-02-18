@@ -1,6 +1,6 @@
 """Settlement service: preview, create, confirm, reject, pay."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import select, func, and_, update
@@ -157,7 +157,7 @@ async def confirm_settlement(
 
     settlement.status = "confirmed"
     settlement.confirmed_by = confirmed_by
-    settlement.confirmed_at = datetime.utcnow()
+    settlement.confirmed_at = datetime.now(timezone.utc)
     session.add(settlement)
 
     return settlement
@@ -198,7 +198,7 @@ async def pay_settlement(
     if settlement.status != "confirmed":
         raise ValueError(f"Cannot pay: status is '{settlement.status}'")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     stmt = (
         update(CommissionLedger)
         .where(CommissionLedger.settlement_id == settlement_id)

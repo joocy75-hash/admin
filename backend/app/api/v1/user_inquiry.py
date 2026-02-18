@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, case
@@ -155,7 +155,7 @@ async def reply_to_inquiry(
     inquiry_id: int,
     body: InquiryReplyCreate,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("users.edit")),
+    current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
     await _verify_user(session, user_id)
 
@@ -173,7 +173,7 @@ async def reply_to_inquiry(
     session.add(reply)
 
     inq.status = "answered"
-    inq.updated_at = datetime.utcnow()
+    inq.updated_at = datetime.now(timezone.utc)
     session.add(inq)
 
     await session.commit()

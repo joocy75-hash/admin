@@ -14,7 +14,8 @@ import {
   useAgent, updateAgent, resetAgentPassword, deleteAgent, type Agent,
 } from '@/hooks/use-agents';
 import { apiClient } from '@/lib/api-client';
-import { ArrowLeft, Save, KeyRound, Trash2, Network, Users } from 'lucide-react';
+import { ArrowLeft, Save, KeyRound, Trash2, Network } from 'lucide-react';
+import CommissionRateTab from './commission-rate-tab';
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: '슈퍼관리자',
@@ -39,7 +40,7 @@ export default function AgentDetailPage() {
   const agentId = Number(id);
   const { agent, loading, error } = useAgent(agentId);
 
-  const [tab, setTab] = useState<'info' | 'children' | 'ancestors'>('info');
+  const [tab, setTab] = useState<'info' | 'commission' | 'children' | 'ancestors'>('info');
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -53,8 +54,6 @@ export default function AgentDetailPage() {
       email: agent.email || '',
       status: agent.status,
       max_sub_agents: String(agent.max_sub_agents),
-      rolling_rate: agent.rolling_rate != null ? String(agent.rolling_rate) : '',
-      losing_rate: agent.losing_rate != null ? String(agent.losing_rate) : '',
       memo: agent.memo || '',
     });
   }, [agent]);
@@ -83,10 +82,6 @@ export default function AgentDetailPage() {
       if (editForm.email) body.email = editForm.email;
       body.status = editForm.status;
       body.max_sub_agents = parseInt(editForm.max_sub_agents) || 100;
-      if (editForm.rolling_rate) body.rolling_rate = parseFloat(editForm.rolling_rate);
-      else body.rolling_rate = null;
-      if (editForm.losing_rate) body.losing_rate = parseFloat(editForm.losing_rate);
-      else body.losing_rate = null;
       if (editForm.memo) body.memo = editForm.memo;
       else body.memo = null;
 
@@ -199,7 +194,7 @@ export default function AgentDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(['info', 'children', 'ancestors'] as const).map((t) => (
+        {(['info', 'commission', 'children', 'ancestors'] as const).map((t) => (
           <button
             key={t}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -210,6 +205,7 @@ export default function AgentDetailPage() {
             onClick={() => setTab(t)}
           >
             {t === 'info' && '기본 정보'}
+            {t === 'commission' && '커미션 요율'}
             {t === 'children' && '하위 에이전트'}
             {t === 'ancestors' && '상위 경로'}
           </button>
@@ -239,26 +235,6 @@ export default function AgentDetailPage() {
               <div className="space-y-2">
                 <Label>이메일</Label>
                 <Input value={editForm.email || ''} onChange={(e) => set('email', e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>롤링 비율 (%)</Label>
-                  <Input
-                    type="number" step="0.01" min="0" max="100"
-                    value={editForm.rolling_rate || ''}
-                    onChange={(e) => set('rolling_rate', e.target.value)}
-                    placeholder="기본값"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>죽장 비율 (%)</Label>
-                  <Input
-                    type="number" step="0.01" min="0" max="100"
-                    value={editForm.losing_rate || ''}
-                    onChange={(e) => set('losing_rate', e.target.value)}
-                    placeholder="기본값"
-                  />
-                </div>
               </div>
               <div className="space-y-2">
                 <Label>최대 하위</Label>
@@ -300,6 +276,10 @@ export default function AgentDetailPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {tab === 'commission' && (
+        <CommissionRateTab agentId={agentId} agent={agent} />
       )}
 
       {tab === 'children' && (

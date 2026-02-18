@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlmodel import Field, SQLModel
 
@@ -11,7 +11,7 @@ class Role(SQLModel, table=True):
     guard: str = Field(default="admin", max_length=20)
     description: str | None = Field(default=None)
     is_system: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Permission(SQLModel, table=True):
@@ -22,7 +22,7 @@ class Permission(SQLModel, table=True):
     module: str = Field(max_length=50, index=True)
     guard: str = Field(default="admin", max_length=20)
     description: str | None = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class RolePermission(SQLModel, table=True):

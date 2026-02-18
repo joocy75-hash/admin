@@ -1,6 +1,6 @@
 """Game management endpoints: providers, games, rounds."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func, or_
@@ -116,7 +116,7 @@ async def update_provider(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(provider, field, value)
-    provider.updated_at = datetime.utcnow()
+    provider.updated_at = datetime.now(timezone.utc)
 
     session.add(provider)
     await session.commit()
@@ -136,7 +136,7 @@ async def delete_provider(
 
     # Soft delete
     provider.is_active = False
-    provider.updated_at = datetime.utcnow()
+    provider.updated_at = datetime.now(timezone.utc)
     session.add(provider)
     await session.commit()
 
@@ -200,7 +200,41 @@ async def list_rounds(
     result = await session.execute(stmt)
     rounds = result.scalars().all()
 
-    items = [await _build_round_response(session, r) for r in rounds]
+    # Batch-load game names and user usernames
+    game_ids = {r.game_id for r in rounds}
+    round_user_ids = {r.user_id for r in rounds}
+
+    game_name_map: dict[int, str] = {}
+    if game_ids:
+        game_rows = (await session.execute(
+            select(Game.id, Game.name).where(Game.id.in_(game_ids))
+        )).all()
+        game_name_map = {row[0]: row[1] for row in game_rows}
+
+    user_name_map: dict[int, str] = {}
+    if round_user_ids:
+        user_rows = (await session.execute(
+            select(User.id, User.username).where(User.id.in_(round_user_ids))
+        )).all()
+        user_name_map = {row[0]: row[1] for row in user_rows}
+
+    items = [
+        GameRoundResponse(
+            id=r.id,
+            game_id=r.game_id,
+            user_id=r.user_id,
+            round_id=r.round_id,
+            bet_amount=r.bet_amount,
+            win_amount=r.win_amount,
+            result=r.result,
+            started_at=r.started_at,
+            ended_at=r.ended_at,
+            created_at=r.created_at,
+            game_name=game_name_map.get(r.game_id),
+            user_username=user_name_map.get(r.user_id),
+        )
+        for r in rounds
+    ]
     return GameRoundListResponse(
         items=items, total=total, page=page, page_size=page_size,
         total_bet=total_bet, total_win=total_win,
@@ -340,7 +374,7 @@ async def update_game(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(game, field, value)
-    game.updated_at = datetime.utcnow()
+    game.updated_at = datetime.now(timezone.utc)
 
     session.add(game)
     await session.commit()
@@ -361,7 +395,7 @@ async def delete_game(
 
     # Soft delete
     game.is_active = False
-    game.updated_at = datetime.utcnow()
+    game.updated_at = datetime.now(timezone.utc)
     session.add(game)
     await session.commit()
     await cache_delete_pattern("games:list")

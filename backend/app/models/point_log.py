@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlmodel import Field, SQLModel
@@ -16,4 +16,4 @@ class PointLog(SQLModel, table=True):
     description: str | None = Field(default=None, max_length=200)
     reference_type: str | None = Field(default=None, max_length=50)
     reference_id: str | None = Field(default=None, max_length=100)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)

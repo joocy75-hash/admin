@@ -2,7 +2,7 @@
 
 import io
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pyotp
 import qrcode
@@ -24,6 +24,7 @@ from app.schemas.auth import (
     TwoFactorSetupResponse,
     TwoFactorVerifyRequest,
 )
+from app.services.cache_service import blacklist_token, is_token_blacklisted
 from app.utils.security import (
     create_access_token,
     create_refresh_token,
@@ -103,7 +104,7 @@ async def login(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
     # Update login info
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = datetime.now(timezone.utc)
     user.last_login_ip = request.client.host if request.client else None
     session.add(user)
 
@@ -116,7 +117,7 @@ async def login(
         device_type=_parse_device_type(ua),
         os=_parse_os(ua),
         browser=_parse_browser(ua),
-        login_at=datetime.utcnow(),
+        login_at=datetime.now(timezone.utc),
     )
     session.add(login_history)
 
@@ -142,6 +143,10 @@ async def refresh_token(
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
+    jti = payload.get("jti")
+    if jti and await is_token_blacklisted(jti):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
+
     user_id = payload.get("sub")
     user = await session.get(AdminUser, int(user_id))
     if not user or user.status != "active":
@@ -159,8 +164,18 @@ async def refresh_token(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(user: AdminUser = Depends(get_current_user)):
-    # Stateless JWT — client discards token. Redis blacklist can be added later.
+async def logout(
+    body: RefreshRequest,
+    user: AdminUser = Depends(get_current_user),
+):
+    payload = decode_token(body.refresh_token)
+    if payload and payload.get("type") == "refresh":
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        if jti and exp:
+            ttl = int(exp - datetime.now().timestamp())
+            if ttl > 0:
+                await blacklist_token(jti, ttl)
     return
 
 

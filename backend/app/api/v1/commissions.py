@@ -1,12 +1,16 @@
 """Commission management: policies, overrides, ledger, webhooks."""
 
-from datetime import datetime
+import hashlib
+import hmac
+import time as _time
+from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_session
 from app.api.deps import PermissionChecker
 from app.models.admin_user import AdminUser
@@ -121,7 +125,7 @@ async def update_policy(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(policy, field, value)
-    policy.updated_at = datetime.utcnow()
+    policy.updated_at = datetime.now(timezone.utc)
 
     session.add(policy)
     await session.commit()
@@ -147,7 +151,7 @@ async def delete_policy(
     if ledger_count > 0:
         # Soft delete (deactivate) if ledger entries exist
         policy.active = False
-        policy.updated_at = datetime.utcnow()
+        policy.updated_at = datetime.now(timezone.utc)
         session.add(policy)
         await session.commit()
     else:
@@ -406,12 +410,61 @@ async def ledger_summary(
 
 # ─── Webhooks (External Game Events) ─────────────────────────────
 
+_WEBHOOK_TIMESTAMP_TOLERANCE = 300  # 5 minutes
+
+
+async def _verify_webhook_signature(request: Request) -> None:
+    """Validate HMAC-SHA256 signature and timestamp on incoming webhooks."""
+    secret = settings.WEBHOOK_SECRET
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Webhook secret not configured",
+        )
+
+    signature = request.headers.get("X-Signature", "")
+    timestamp_str = request.headers.get("X-Timestamp", "")
+    if not signature or not timestamp_str:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing X-Signature or X-Timestamp header",
+        )
+
+    # Replay attack prevention
+    try:
+        ts = int(timestamp_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid X-Timestamp",
+        )
+    if abs(_time.time() - ts) > _WEBHOOK_TIMESTAMP_TOLERANCE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Timestamp expired",
+        )
+
+    raw_body = await request.body()
+    message = f"{timestamp_str}.".encode() + raw_body
+    expected = hmac.new(
+        secret.encode(), message, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid webhook signature",
+        )
+
+
 @router.post("/webhook/bet", status_code=status.HTTP_201_CREATED)
 async def receive_bet_webhook(
     body: BetWebhook,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ):
     """Receive bet event from game backend. Generates rolling commissions."""
+    await _verify_webhook_signature(request)
+
     # Verify agent exists
     agent = await session.get(AdminUser, body.agent_id)
     if not agent:
@@ -450,9 +503,12 @@ async def receive_bet_webhook(
 @router.post("/webhook/round-result", status_code=status.HTTP_201_CREATED)
 async def receive_round_result_webhook(
     body: RoundResultWebhook,
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ):
     """Receive game round result from game backend. Generates losing commissions on losses."""
+    await _verify_webhook_signature(request)
+
     agent = await session.get(AdminUser, body.agent_id)
     if not agent:
         raise HTTPException(status_code=400, detail="Agent not found")

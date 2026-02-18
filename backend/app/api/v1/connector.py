@@ -1,7 +1,7 @@
 """External game API connector endpoints: status, test, sync, webhook."""
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select, func
@@ -155,7 +155,7 @@ async def sync_games(
             game.name = eg.get("name", game.name)
             game.is_active = eg.get("is_active", game.is_active)
             game.thumbnail_url = eg.get("thumbnail_url", game.thumbnail_url)
-            game.updated_at = datetime.utcnow()
+            game.updated_at = datetime.now(timezone.utc)
             session.add(game)
             updated_count += 1
         else:
@@ -172,7 +172,7 @@ async def sync_games(
             new_count += 1
 
     # Update provider last sync time
-    provider.updated_at = datetime.utcnow()
+    provider.updated_at = datetime.now(timezone.utc)
     session.add(provider)
     await session.commit()
 
@@ -199,19 +199,27 @@ async def receive_webhook(
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
 
-    # Verify HMAC signature if api_secret (api_key used as secret for webhook)
+    # Verify HMAC signature (api_key used as secret for webhook verification)
     signature = request.headers.get("X-Signature", "")
-    if signature:
+    if provider.api_key:
+        if not signature:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Missing X-Signature header",
+            )
         raw_body = await request.body()
         connector = get_connector(
             category=provider.category,
             provider_id=provider.id,
             api_url=provider.api_url or "",
-            api_key=provider.api_key or "",
+            api_key=provider.api_key,
             api_secret=provider.api_key,
         )
         if not connector.verify_webhook_signature(raw_body, signature):
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid webhook signature",
+            )
 
     return {
         "status": "received",

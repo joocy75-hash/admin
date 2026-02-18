@@ -1,6 +1,6 @@
 """System settings management endpoints."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -100,13 +100,13 @@ async def update_setting(
             key=key,
             value=body.value,
             updated_by=current_user.id,
-            updated_at=datetime.utcnow(),
+            updated_at=datetime.now(timezone.utc),
         )
         session.add(setting)
     else:
         setting.value = body.value
         setting.updated_by = current_user.id
-        setting.updated_at = datetime.utcnow()
+        setting.updated_at = datetime.now(timezone.utc)
         session.add(setting)
 
     await session.commit()
@@ -138,13 +138,13 @@ async def bulk_update_settings(
                 key=item.key,
                 value=item.value,
                 updated_by=current_user.id,
-                updated_at=datetime.utcnow(),
+                updated_at=datetime.now(timezone.utc),
             )
             session.add(setting)
         else:
             setting.value = item.value
             setting.updated_by = current_user.id
-            setting.updated_at = datetime.utcnow()
+            setting.updated_at = datetime.now(timezone.utc)
             session.add(setting)
 
         await session.flush()

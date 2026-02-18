@@ -127,6 +127,33 @@ class LedgerSummary(BaseModel):
     count: int
 
 
+# ─── Agent Commission Rate (Hierarchical) ────────────────────────
+
+class AgentCommissionRateResponse(BaseModel):
+    id: int
+    agent_id: int
+    game_category: str
+    commission_type: str
+    rate: Decimal
+    updated_at: datetime
+    agent_username: str | None = None
+    agent_code: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class AgentCommissionRateUpdate(BaseModel):
+    game_category: str = Field(
+        pattern=r"^(casino|slot|mini_game|virtual_soccer|sports|esports|holdem)$",
+    )
+    commission_type: str = Field(pattern=r"^(rolling|losing)$")
+    rate: Decimal = Field(ge=0, le=100)
+
+
+class AgentCommissionRateBulkUpdate(BaseModel):
+    rates: list[AgentCommissionRateUpdate]
+
+
 # ─── Webhook Payloads ─────────────────────────────────────────────
 
 class BetWebhook(BaseModel):

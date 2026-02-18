@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, or_, and_
@@ -101,7 +101,7 @@ async def send_message_to_user(
     user_id: int,
     body: MessageCreate,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("users.edit")),
+    current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
     await _verify_user(session, user_id)
 
@@ -138,7 +138,7 @@ async def mark_message_read(
     user_id: int,
     message_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("users.edit")),
+    current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
     await _verify_user(session, user_id)
 
@@ -153,7 +153,7 @@ async def mark_message_read(
         raise HTTPException(status_code=404, detail="Message not found for this user")
 
     msg.is_read = True
-    msg.read_at = datetime.utcnow()
+    msg.read_at = datetime.now(timezone.utc)
     session.add(msg)
     await session.commit()
     await session.refresh(msg)

@@ -58,8 +58,9 @@ export default function LoginPage() {
       setAuth(me, data.access_token, data.refresh_token);
       router.push('/dashboard');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Login failed';
-      if (message === '2FA code required') {
+      const apiErr = err as Error & { status?: number };
+      const message = apiErr.message || 'Login failed';
+      if (apiErr.status === 400 && message.includes('2FA')) {
         setNeeds2FA(true);
         setError('');
       } else {

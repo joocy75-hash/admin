@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
 
 type RequestOptions = {
   method?: string;
@@ -6,7 +6,7 @@ type RequestOptions = {
   body?: unknown;
 };
 
-function getToken(): string | null {
+export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
     const stored = localStorage.getItem('auth-storage');

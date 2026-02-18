@@ -4,10 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePartnerCommissions } from '@/hooks/use-partner';
 import { Percent } from 'lucide-react';
-
-function formatKRW(amount: number): string {
-  return '\u20A9' + amount.toLocaleString('ko-KR');
-}
+import { formatAmount } from '@/lib/utils';
 
 const TYPE_LABELS: Record<string, string> = {
   rolling: '롤링',
@@ -47,7 +44,7 @@ export default function PartnerCommissionsPage() {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {loading ? '...' : formatKRW(data?.total_commission ?? 0)}
+            {loading ? '...' : formatAmount(data?.total_commission ?? 0)}
           </div>
         </CardContent>
       </Card>
@@ -105,9 +102,9 @@ export default function PartnerCommissionsPage() {
                       {TYPE_LABELS[c.type] || c.type}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatKRW(c.source_amount)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatAmount(c.source_amount)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{(c.rate * 100).toFixed(2)}%</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono font-medium">{formatKRW(c.commission_amount)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono font-medium">{formatAmount(c.commission_amount)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm">
                     <span className={`text-xs ${
                       c.status === 'settled' ? 'text-green-600 dark:text-green-400'

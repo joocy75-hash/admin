@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import bcrypt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from sqlalchemy import create_engine, text
 from sqlmodel import Session
@@ -21,7 +21,7 @@ from app.models.money_log import MoneyLog
 from app.models.point_log import PointLog
 from app.models.role import AdminUserRole, Permission, Role, RolePermission
 from app.models.user import User, UserTree
-from app.models.user_bank_account import UserBankAccount
+from app.models.user_wallet_address import UserWalletAddress
 from app.models.user_betting_permission import UserBettingPermission
 from app.models.user_game_rolling_rate import UserGameRollingRate
 from app.models.user_login_history import UserLoginHistory
@@ -128,7 +128,7 @@ def seed():
         session.add(AdminUserTree(ancestor_id=admin.id, descendant_id=admin.id, depth=0))
 
         # 8. Create sample users
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         user1 = User(
             username="testuser1",
             nickname="tester1",
@@ -194,10 +194,10 @@ def seed():
         for lr in login_records:
             session.add(lr)
 
-        # 10. Bank accounts
-        session.add(UserBankAccount(user_id=user1.id, bank_name="KB", bank_code="004", account_number="123-456-789012", holder_name="Kim Cheolsu", is_primary=True, status="active"))
-        session.add(UserBankAccount(user_id=user1.id, bank_name="Shinhan", bank_code="088", account_number="110-234-567890", holder_name="Kim Cheolsu", is_primary=False, status="active"))
-        session.add(UserBankAccount(user_id=user2.id, bank_name="Woori", bank_code="020", account_number="1002-345-678901", holder_name="Lee Younghee", is_primary=True, status="active"))
+        # 10. Wallet addresses (crypto)
+        session.add(UserWalletAddress(user_id=user1.id, coin_type="USDT", network="TRC20", address="TN7hAk3VrFQmPzYYBMNiXLmRbwYdEj4k7p", label="메인 지갑", is_primary=True, status="active"))
+        session.add(UserWalletAddress(user_id=user1.id, coin_type="ETH", network="ERC20", address="0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18", label="ETH 지갑", is_primary=False, status="active"))
+        session.add(UserWalletAddress(user_id=user2.id, coin_type="USDT", network="TRC20", address="TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn", label="기본 지갑", is_primary=True, status="active"))
 
         # 11. Betting permissions (all categories for user1)
         for cat in GAME_CATEGORIES:

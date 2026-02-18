@@ -2,10 +2,7 @@
 
 import { useState } from 'react';
 import { usePartnerUsers } from '@/hooks/use-partner';
-
-function formatKRW(amount: number): string {
-  return '\u20A9' + amount.toLocaleString('ko-KR');
-}
+import { formatAmount } from '@/lib/utils';
 
 const STATUS_LABELS: Record<string, string> = {
   active: '활성',
@@ -81,9 +78,9 @@ export default function PartnerUsersPage() {
                       {STATUS_LABELS[user.status] || user.status}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatKRW(user.balance)}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatKRW(user.total_bet)}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatKRW(user.total_win)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatAmount(user.balance)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatAmount(user.total_bet)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatAmount(user.total_win)}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                     {new Date(user.created_at).toLocaleDateString('ko-KR')}
                   </td>

@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import Column, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
@@ -15,7 +16,7 @@ class Setting(SQLModel, table=True):
     value: dict = Field(sa_column=Column(JSONB, nullable=False))
     description: str | None = Field(default=None)
     updated_by: int | None = Field(default=None, foreign_key="admin_users.id")
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Announcement(SQLModel, table=True):
@@ -30,7 +31,7 @@ class Announcement(SQLModel, table=True):
     starts_at: datetime | None = Field(default=None)
     ends_at: datetime | None = Field(default=None)
     created_by: int | None = Field(default=None, foreign_key="admin_users.id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class AgentSalaryConfig(SQLModel, table=True):
@@ -40,7 +41,7 @@ class AgentSalaryConfig(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     admin_user_id: int = Field(foreign_key="admin_users.id")
     salary_type: str = Field(max_length=20)  # daily, weekly, monthly
-    base_rate: float = Field(default=0)
-    min_threshold: float = Field(default=0)
+    base_rate: Decimal = Field(default=Decimal("0"), max_digits=18, decimal_places=2)
+    min_threshold: Decimal = Field(default=Decimal("0"), max_digits=18, decimal_places=2)
     active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

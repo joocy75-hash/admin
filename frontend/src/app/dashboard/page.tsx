@@ -4,10 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDashboardStats, useRecentTransactions, useRecentCommissions } from '@/hooks/use-dashboard';
 import { Users, Network, Wallet, Gamepad2, Percent, TrendingUp, TrendingDown, Activity, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
-
-function formatKRW(amount: number): string {
-  return '\u20A9' + amount.toLocaleString('ko-KR');
-}
+import { formatAmount } from '@/lib/utils';
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -61,18 +58,18 @@ function SkeletonTable() {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const { data: stats, loading: statsLoading } = useDashboardStats();
+  const { data: stats, loading: statsLoading, error: statsError } = useDashboardStats();
   const { data: transactions, loading: txLoading } = useRecentTransactions();
   const { data: commissions, loading: commLoading } = useRecentCommissions();
 
   const statCards = stats ? [
     { title: '총 에이전트', value: String(stats.total_agents), icon: Network, color: 'text-blue-500' },
     { title: '총 회원수', value: String(stats.total_users), icon: Users, color: 'text-green-500' },
-    { title: '오늘 입금', value: formatKRW(stats.today_deposits), icon: TrendingUp, color: 'text-emerald-500' },
-    { title: '오늘 출금', value: formatKRW(stats.today_withdrawals), icon: TrendingDown, color: 'text-red-500' },
-    { title: '오늘 베팅', value: formatKRW(stats.today_bets), icon: Gamepad2, color: 'text-purple-500' },
-    { title: '오늘 커미션', value: formatKRW(stats.today_commissions), icon: Percent, color: 'text-orange-500' },
-    { title: '보유 잔액', value: formatKRW(stats.total_balance), icon: Wallet, color: 'text-indigo-500' },
+    { title: '오늘 입금', value: formatAmount(stats.today_deposits), icon: TrendingUp, color: 'text-emerald-500' },
+    { title: '오늘 출금', value: formatAmount(stats.today_withdrawals), icon: TrendingDown, color: 'text-red-500' },
+    { title: '오늘 베팅', value: formatAmount(stats.today_bets), icon: Gamepad2, color: 'text-purple-500' },
+    { title: '오늘 커미션', value: formatAmount(stats.today_commissions), icon: Percent, color: 'text-orange-500' },
+    { title: '보유 잔액', value: formatAmount(stats.total_balance), icon: Wallet, color: 'text-indigo-500' },
     { title: '활성 게임', value: String(stats.active_games), icon: Activity, color: 'text-pink-500' },
   ] : [];
 
@@ -84,6 +81,14 @@ export default function DashboardPage() {
           안녕하세요, {user?.username}님. 오늘의 현황입니다.
         </p>
       </div>
+
+      {statsError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
+          <p className="text-sm font-medium text-red-800 dark:text-red-200">
+            데이터를 불러오는 중 오류가 발생했습니다: {statsError}
+          </p>
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
@@ -163,7 +168,7 @@ export default function DashboardPage() {
                             {TYPE_LABELS[tx.type] || tx.type}
                           </span>
                         </td>
-                        <td className="py-2 text-right font-mono">{formatKRW(tx.amount)}</td>
+                        <td className="py-2 text-right font-mono">{formatAmount(tx.amount)}</td>
                         <td className="py-2">
                           <span className={`text-xs ${
                             tx.status === 'approved' || tx.status === 'completed'
@@ -219,7 +224,7 @@ export default function DashboardPage() {
                             {TYPE_LABELS[c.type] || c.type}
                           </span>
                         </td>
-                        <td className="py-2 text-right font-mono">{formatKRW(c.commission_amount)}</td>
+                        <td className="py-2 text-right font-mono">{formatAmount(c.commission_amount)}</td>
                         <td className="py-2 text-right text-xs text-muted-foreground">{timeAgo(c.created_at)}</td>
                       </tr>
                     ))}

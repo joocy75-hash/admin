@@ -6,11 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTransactionList } from '@/hooks/use-transactions';
-import { ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Copy } from 'lucide-react';
 
-const TYPE_LABELS: Record<string, string> = {
-  deposit: '입금', withdrawal: '출금', adjustment: '조정',
-};
 const STATUS_LABELS: Record<string, string> = {
   pending: '대기', approved: '승인', rejected: '거부', completed: '완료',
 };
@@ -21,14 +18,17 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-blue-100 text-blue-800',
 };
 
-function formatKRW(n: number) { return '\u20A9' + Number(n).toLocaleString('ko-KR'); }
+function formatAmount(n: number) { return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 }); }
+
+function shortenHash(hash: string) {
+  if (hash.length <= 16) return hash;
+  return hash.slice(0, 8) + '...' + hash.slice(-6);
+}
 
 type Props = { userId: number };
 
 export default function TabTransactions({ userId }: Props) {
-  const [page, setPage] = useState(1);
-  const [type, setType] = useState('');
-  const [status, setStatus] = useState('');
+  const [page] = useState(1);
 
   const { data: depositData, loading: depositLoading } = useTransactionList({
     user_id: userId,
@@ -44,11 +44,15 @@ export default function TabTransactions({ userId }: Props) {
     page_size: 10,
   });
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+  };
+
   return (
     <div className="space-y-6">
       {/* Deposit List */}
       <Card>
-        <CardHeader><CardTitle className="text-base">입금 신청 내역</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">입금 내역</CardTitle></CardHeader>
         <CardContent className="p-0">
           {depositLoading ? (
             <div className="space-y-3 p-4">
@@ -67,9 +71,10 @@ export default function TabTransactions({ userId }: Props) {
                 <thead>
                   <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
                     <th className="px-4 py-2 text-right">금액</th>
+                    <th className="px-4 py-2 text-center">코인</th>
+                    <th className="px-4 py-2 text-center">네트워크</th>
+                    <th className="px-4 py-2 text-left">TX Hash</th>
                     <th className="px-4 py-2 text-center">상태</th>
-                    <th className="px-4 py-2 text-left">메모</th>
-                    <th className="px-4 py-2 text-left">처리자</th>
                     <th className="px-4 py-2 text-left">신청일</th>
                     <th className="px-4 py-2 text-left">처리일</th>
                   </tr>
@@ -77,14 +82,28 @@ export default function TabTransactions({ userId }: Props) {
                 <tbody className="divide-y">
                   {depositData.items.map((tx) => (
                     <tr key={tx.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-2 text-right font-mono text-blue-600">{formatKRW(tx.amount)}</td>
+                      <td className="px-4 py-2 text-right font-mono text-blue-600">+{formatAmount(tx.amount)}</td>
+                      <td className="px-4 py-2 text-center">
+                        {tx.coin_type ? <Badge variant="outline" className="text-xs">{tx.coin_type}</Badge> : '-'}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {tx.network ? <Badge variant="secondary" className="text-xs">{tx.network}</Badge> : '-'}
+                      </td>
+                      <td className="px-4 py-2">
+                        {tx.tx_hash ? (
+                          <div className="flex items-center gap-1">
+                            <code className="text-xs font-mono text-muted-foreground">{shortenHash(tx.tx_hash)}</code>
+                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => copyToClipboard(tx.tx_hash!)}>
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : '-'}
+                      </td>
                       <td className="px-4 py-2 text-center">
                         <Badge className={STATUS_COLORS[tx.status] || ''} variant="secondary">
                           {STATUS_LABELS[tx.status] || tx.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-2 text-muted-foreground">{tx.memo || '-'}</td>
-                      <td className="px-4 py-2 text-muted-foreground">{tx.processed_by_username || '-'}</td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">{new Date(tx.created_at).toLocaleString('ko-KR')}</td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">{tx.processed_at ? new Date(tx.processed_at).toLocaleString('ko-KR') : '-'}</td>
                     </tr>
@@ -98,7 +117,7 @@ export default function TabTransactions({ userId }: Props) {
 
       {/* Withdrawal List */}
       <Card>
-        <CardHeader><CardTitle className="text-base">출금 신청 내역</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">출금 내역</CardTitle></CardHeader>
         <CardContent className="p-0">
           {withdrawalLoading ? (
             <div className="space-y-3 p-4">
@@ -117,9 +136,11 @@ export default function TabTransactions({ userId }: Props) {
                 <thead>
                   <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
                     <th className="px-4 py-2 text-right">금액</th>
+                    <th className="px-4 py-2 text-center">코인</th>
+                    <th className="px-4 py-2 text-center">네트워크</th>
+                    <th className="px-4 py-2 text-left">출금 주소</th>
+                    <th className="px-4 py-2 text-left">TX Hash</th>
                     <th className="px-4 py-2 text-center">상태</th>
-                    <th className="px-4 py-2 text-left">메모</th>
-                    <th className="px-4 py-2 text-left">처리자</th>
                     <th className="px-4 py-2 text-left">신청일</th>
                     <th className="px-4 py-2 text-left">처리일</th>
                   </tr>
@@ -127,14 +148,38 @@ export default function TabTransactions({ userId }: Props) {
                 <tbody className="divide-y">
                   {withdrawalData.items.map((tx) => (
                     <tr key={tx.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-2 text-right font-mono text-red-600">{formatKRW(tx.amount)}</td>
+                      <td className="px-4 py-2 text-right font-mono text-red-600">-{formatAmount(tx.amount)}</td>
+                      <td className="px-4 py-2 text-center">
+                        {tx.coin_type ? <Badge variant="outline" className="text-xs">{tx.coin_type}</Badge> : '-'}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {tx.network ? <Badge variant="secondary" className="text-xs">{tx.network}</Badge> : '-'}
+                      </td>
+                      <td className="px-4 py-2">
+                        {tx.wallet_address ? (
+                          <div className="flex items-center gap-1">
+                            <code className="text-xs font-mono text-muted-foreground">{shortenHash(tx.wallet_address)}</code>
+                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => copyToClipboard(tx.wallet_address!)}>
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : '-'}
+                      </td>
+                      <td className="px-4 py-2">
+                        {tx.tx_hash ? (
+                          <div className="flex items-center gap-1">
+                            <code className="text-xs font-mono text-muted-foreground">{shortenHash(tx.tx_hash)}</code>
+                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => copyToClipboard(tx.tx_hash!)}>
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : '-'}
+                      </td>
                       <td className="px-4 py-2 text-center">
                         <Badge className={STATUS_COLORS[tx.status] || ''} variant="secondary">
                           {STATUS_LABELS[tx.status] || tx.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-2 text-muted-foreground">{tx.memo || '-'}</td>
-                      <td className="px-4 py-2 text-muted-foreground">{tx.processed_by_username || '-'}</td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">{new Date(tx.created_at).toLocaleString('ko-KR')}</td>
                       <td className="px-4 py-2 text-xs text-muted-foreground">{tx.processed_at ? new Date(tx.processed_at).toLocaleString('ko-KR') : '-'}</td>
                     </tr>

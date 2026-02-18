@@ -9,12 +9,19 @@ from pydantic import BaseModel, Field
 class DepositCreate(BaseModel):
     user_id: int
     amount: Decimal = Field(gt=0, max_digits=18, decimal_places=2)
+    coin_type: str | None = Field(default=None, max_length=20)  # USDT, TRX, etc.
+    network: str | None = Field(default=None, max_length=20)  # TRC20, ERC20, etc.
+    tx_hash: str | None = Field(default=None, max_length=255)
+    wallet_address: str | None = Field(default=None, max_length=255)
     memo: str | None = None
 
 
 class WithdrawalCreate(BaseModel):
     user_id: int
     amount: Decimal = Field(gt=0, max_digits=18, decimal_places=2)
+    coin_type: str | None = Field(default=None, max_length=20)
+    network: str | None = Field(default=None, max_length=20)
+    wallet_address: str | None = Field(default=None, max_length=255)
     memo: str | None = None
 
 
@@ -40,6 +47,11 @@ class TransactionResponse(BaseModel):
     balance_before: Decimal
     balance_after: Decimal
     status: str
+    coin_type: str | None = None
+    network: str | None = None
+    tx_hash: str | None = None
+    wallet_address: str | None = None
+    confirmations: int | None = None
     reference_type: str | None
     reference_id: str | None
     memo: str | None

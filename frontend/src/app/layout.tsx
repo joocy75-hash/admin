@@ -17,6 +17,14 @@ export const metadata: Metadata = {
   description: '통합 게임 관리자 패널',
 };
 
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
+const wsUrl = apiUrl.replace(/^http/, 'ws');
+const isDev = process.env.NODE_ENV === 'development';
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
+  : "script-src 'self' 'unsafe-inline'";
+const cspContent = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${apiUrl} ${wsUrl};`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -27,7 +35,7 @@ export default function RootLayout({
       <head>
         <meta
           httpEquiv="Content-Security-Policy"
-          content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://localhost:8002 ws://localhost:8002;"
+          content={cspContent}
         />
       </head>
       {/* TODO: Migrate sensitive tokens from localStorage to httpOnly cookies for production */}

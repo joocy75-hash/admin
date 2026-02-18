@@ -2,10 +2,7 @@
 
 import { useState } from 'react';
 import { usePartnerSettlements } from '@/hooks/use-partner';
-
-function formatKRW(amount: number): string {
-  return '\u20A9' + amount.toLocaleString('ko-KR');
-}
+import { formatAmount } from '@/lib/utils';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: '초안',
@@ -65,7 +62,7 @@ export default function PartnerSettlementsPage() {
                     {new Date(s.period_start).toLocaleDateString('ko-KR')} ~ {new Date(s.period_end).toLocaleDateString('ko-KR')}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono font-medium">
-                    {formatKRW(s.total_commission)}
+                    {formatAmount(s.total_commission)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm">
                     <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${

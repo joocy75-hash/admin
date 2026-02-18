@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlmodel import Field, SQLModel
 
@@ -15,5 +15,5 @@ class UserLoginHistory(SQLModel, table=True):
     browser: str | None = Field(default=None, max_length=50)
     country: str | None = Field(default=None, max_length=50)
     city: str | None = Field(default=None, max_length=100)
-    login_at: datetime = Field(default_factory=datetime.utcnow)
+    login_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     logout_at: datetime | None = Field(default=None)

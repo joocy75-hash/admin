@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
@@ -23,4 +23,4 @@ class AuditLog(SQLModel, table=True):
     after_data: dict | None = Field(default=None, sa_column=Column(JSONB))
 
     description: str | None = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)

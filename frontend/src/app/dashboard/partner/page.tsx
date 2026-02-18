@@ -5,10 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePartnerDashboard, usePartnerCommissions } from '@/hooks/use-partner';
 import { useAuthStore } from '@/stores/auth-store';
 import { Users, Network, TrendingUp, Percent, Calculator, Gamepad2 } from 'lucide-react';
-
-function formatKRW(amount: number): string {
-  return '\u20A9' + amount.toLocaleString('ko-KR');
-}
+import { formatAmount } from '@/lib/utils';
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -48,10 +45,10 @@ export default function PartnerDashboardPage() {
   const statCards = stats ? [
     { title: '하위 유저수', value: String(stats.total_sub_users), icon: Users, color: 'text-blue-500' },
     { title: '하위 에이전트', value: String(stats.total_sub_agents), icon: Network, color: 'text-green-500' },
-    { title: '총 베팅', value: formatKRW(stats.total_bet_amount), icon: Gamepad2, color: 'text-purple-500' },
-    { title: '총 커미션', value: formatKRW(stats.total_commission), icon: Percent, color: 'text-orange-500' },
-    { title: '이번달 정산', value: formatKRW(stats.month_settlement), icon: Calculator, color: 'text-emerald-500' },
-    { title: '이번달 베팅', value: formatKRW(stats.month_bet_amount), icon: TrendingUp, color: 'text-indigo-500' },
+    { title: '총 베팅', value: formatAmount(stats.total_bet_amount), icon: Gamepad2, color: 'text-purple-500' },
+    { title: '총 커미션', value: formatAmount(stats.total_commission), icon: Percent, color: 'text-orange-500' },
+    { title: '이번달 정산', value: formatAmount(stats.month_settlement), icon: Calculator, color: 'text-emerald-500' },
+    { title: '이번달 베팅', value: formatAmount(stats.month_bet_amount), icon: TrendingUp, color: 'text-indigo-500' },
   ] : [];
 
   return (
@@ -156,8 +153,8 @@ export default function PartnerDashboardPage() {
                             {TYPE_LABELS[c.type] || c.type}
                           </span>
                         </td>
-                        <td className="py-2 text-right font-mono text-xs">{formatKRW(c.source_amount)}</td>
-                        <td className="py-2 text-right font-mono">{formatKRW(c.commission_amount)}</td>
+                        <td className="py-2 text-right font-mono text-xs">{formatAmount(c.source_amount)}</td>
+                        <td className="py-2 text-right font-mono">{formatAmount(c.commission_amount)}</td>
                         <td className="py-2 text-right text-xs text-muted-foreground">{timeAgo(c.created_at)}</td>
                       </tr>
                     ))}

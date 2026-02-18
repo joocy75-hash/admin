@@ -42,3 +42,13 @@ async def cache_delete_pattern(pattern: str) -> None:
         keys.append(key)
     if keys:
         await r.delete(*keys)
+
+
+async def blacklist_token(jti: str, ttl: int) -> None:
+    r = await get_redis()
+    await r.set(f"token_blacklist:{jti}", "1", ex=max(ttl, 1))
+
+
+async def is_token_blacklisted(jti: str) -> bool:
+    r = await get_redis()
+    return await r.exists(f"token_blacklist:{jti}") > 0

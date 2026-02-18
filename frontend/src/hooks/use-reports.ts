@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, API_BASE_URL, getToken } from '@/lib/api-client';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -117,23 +117,9 @@ export function useFinancialReport(startDate: string, endDate: string) {
 
 // ─── Excel Export ────────────────────────────────────────────────
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
-
-function getTokenFromStorage(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem('auth-storage');
-    if (!stored) return null;
-    const parsed = JSON.parse(stored);
-    return parsed?.state?.accessToken ?? null;
-  } catch {
-    return null;
-  }
-}
-
 async function downloadExcel(url: string, filename: string) {
-  const token = getTokenFromStorage();
-  const res = await fetch(`${API_BASE}${url}`, {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}${url}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) throw new Error(`Export failed: ${res.status}`);

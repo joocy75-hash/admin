@@ -1,6 +1,6 @@
 """Audit log middleware — records all mutating API requests."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -71,7 +71,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                     resource_type=module.rstrip("s") if module != "unknown" else None,
                     resource_id=resource_id,
                     description=f"{request.method} {path}",
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(timezone.utc),
                 )
                 await session.execute(stmt)
                 await session.commit()

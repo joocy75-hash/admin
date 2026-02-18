@@ -11,10 +11,7 @@ import {
   exportFinancialReport,
 } from '@/hooks/use-reports';
 import { Download } from 'lucide-react';
-
-function formatKRW(amount: number): string {
-  return '\u20A9' + amount.toLocaleString('ko-KR');
-}
+import { formatAmount } from '@/lib/utils';
 
 function getDateRange(preset: string): { start: string; end: string } {
   const today = new Date();
@@ -208,8 +205,8 @@ function AgentTab({ data, loading }: { data: import('@/hooks/use-reports').Agent
                 </span>
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-sm text-right">{r.total_users}</td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatKRW(r.total_bets)}</td>
-              <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatKRW(r.total_commissions)}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatAmount(r.total_bets)}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatAmount(r.total_commissions)}</td>
             </tr>
           ))}
         </tbody>
@@ -217,8 +214,8 @@ function AgentTab({ data, loading }: { data: import('@/hooks/use-reports').Agent
           <tr className="font-semibold">
             <td className="px-4 py-3 text-sm" colSpan={3}>합계</td>
             <td className="px-4 py-3 text-sm text-right">{totals.users}</td>
-            <td className="px-4 py-3 text-sm text-right font-mono">{formatKRW(totals.bets)}</td>
-            <td className="px-4 py-3 text-sm text-right font-mono">{formatKRW(totals.commissions)}</td>
+            <td className="px-4 py-3 text-sm text-right font-mono">{formatAmount(totals.bets)}</td>
+            <td className="px-4 py-3 text-sm text-right font-mono">{formatAmount(totals.commissions)}</td>
           </tr>
         </tfoot>
       </table>
@@ -249,7 +246,7 @@ function CommissionTab({ data, loading }: { data: import('@/hooks/use-reports').
             <CardTitle className="text-sm font-medium text-muted-foreground">롤링 커미션 합계</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{formatKRW(rollingTotal)}</div>
+            <div className="text-2xl font-bold text-blue-600">{formatAmount(rollingTotal)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -257,7 +254,7 @@ function CommissionTab({ data, loading }: { data: import('@/hooks/use-reports').
             <CardTitle className="text-sm font-medium text-muted-foreground">죽장 커미션 합계</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{formatKRW(losingTotal)}</div>
+            <div className="text-2xl font-bold text-purple-600">{formatAmount(losingTotal)}</div>
           </CardContent>
         </Card>
       </div>
@@ -285,7 +282,7 @@ function CommissionTab({ data, loading }: { data: import('@/hooks/use-reports').
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-right">{d.count}건</td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatKRW(d.total_amount)}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-right font-mono">{formatAmount(d.total_amount)}</td>
               </tr>
             ))}
           </tbody>
@@ -310,7 +307,7 @@ function FinancialTab({ data, loading }: { data: import('@/hooks/use-reports').F
             <CardTitle className="text-sm font-medium text-muted-foreground">총 입금</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatKRW(data.total_deposits)}</div>
+            <div className="text-2xl font-bold text-green-600">{formatAmount(data.total_deposits)}</div>
             <p className="text-xs text-muted-foreground mt-1">{data.deposit_count}건</p>
           </CardContent>
         </Card>
@@ -319,7 +316,7 @@ function FinancialTab({ data, loading }: { data: import('@/hooks/use-reports').F
             <CardTitle className="text-sm font-medium text-muted-foreground">총 출금</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatKRW(data.total_withdrawals)}</div>
+            <div className="text-2xl font-bold text-red-600">{formatAmount(data.total_withdrawals)}</div>
             <p className="text-xs text-muted-foreground mt-1">{data.withdrawal_count}건</p>
           </CardContent>
         </Card>
@@ -329,7 +326,7 @@ function FinancialTab({ data, loading }: { data: import('@/hooks/use-reports').F
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${data.net_revenue >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-              {formatKRW(data.net_revenue)}
+              {formatAmount(data.net_revenue)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">입금 - 출금</p>
           </CardContent>
@@ -339,7 +336,7 @@ function FinancialTab({ data, loading }: { data: import('@/hooks/use-reports').F
             <CardTitle className="text-sm font-medium text-muted-foreground">커미션 지출</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{formatKRW(data.total_commissions)}</div>
+            <div className="text-2xl font-bold text-orange-600">{formatAmount(data.total_commissions)}</div>
           </CardContent>
         </Card>
       </div>

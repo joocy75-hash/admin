@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -33,9 +33,9 @@ class User(SQLModel, table=True):
     # Registration
     registration_ip: str | None = Field(default=None, max_length=45)
 
-    # Virtual account
-    virtual_account_bank: str | None = Field(default=None, max_length=50)
-    virtual_account_number: str | None = Field(default=None, max_length=50)
+    # Crypto deposit address (assigned by system)
+    deposit_address: str | None = Field(default=None, max_length=255)
+    deposit_network: str | None = Field(default=None, max_length=20)  # TRC20, ERC20, BEP20
 
     # Aggregated stats
     total_deposit: Decimal = Field(default=Decimal("0"), max_digits=18, decimal_places=2)
@@ -49,8 +49,8 @@ class User(SQLModel, table=True):
     last_login_ip: str | None = Field(default=None, max_length=45)
     last_deposit_at: datetime | None = Field(default=None)
     last_bet_at: datetime | None = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class UserTree(SQLModel, table=True):

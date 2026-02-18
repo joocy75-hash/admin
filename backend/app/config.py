@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     APP_NAME: str = "Game Admin Panel"
     RATE_LIMIT_ENABLED: bool = True
     IP_WHITELIST: list[str] = []
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_CHAT_ID: str = ""
+    WEBHOOK_SECRET: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

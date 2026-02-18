@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: admin_panel
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-admin1234}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -37,14 +37,14 @@ services:
     container_name: admin-panel-backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+asyncpg://admin:${DB_PASSWORD:-admin1234}@db:5432/admin_panel
-      DATABASE_URL_SYNC: postgresql://admin:${DB_PASSWORD:-admin1234}@db:5432/admin_panel
+      DATABASE_URL: postgresql+asyncpg://admin:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/admin_panel
+      DATABASE_URL_SYNC: postgresql://admin:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/admin_panel
       REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       JWT_ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 15
       REFRESH_TOKEN_EXPIRE_DAYS: 7
-      CORS_ORIGINS: '["http://localhost:3001"]'
+      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3001"]}'
       ENV: production
       RATE_LIMIT_ENABLED: "true"
     depends_on:
@@ -77,8 +77,10 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/nginx-ssl.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - backend
       - frontend

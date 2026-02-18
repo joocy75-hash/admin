@@ -14,12 +14,12 @@ export type UserStatistics = {
   deposit_withdrawal_diff: number;
 };
 
-export type BankAccount = {
+export type WalletAddress = {
   id: number;
-  bank_name: string;
-  bank_code: string | null;
-  account_number: string;
-  holder_name: string;
+  coin_type: string;
+  network: string;
+  address: string;
+  label: string | null;
   is_primary: boolean;
   status: string;
 };
@@ -49,8 +49,8 @@ export type UserDetailData = {
     nickname: string | null;
     color: string | null;
     registration_ip: string | null;
-    virtual_account_bank: string | null;
-    virtual_account_number: string | null;
+    deposit_address: string | null;
+    deposit_network: string | null;
     total_deposit: number;
     total_withdrawal: number;
     total_bet: number;
@@ -60,7 +60,7 @@ export type UserDetailData = {
     last_bet_at: string | null;
   };
   statistics: UserStatistics;
-  bank_accounts: BankAccount[];
+  wallet_addresses: WalletAddress[];
   betting_permissions: BettingPermission[];
   null_betting_configs: NullBettingConfig[];
   game_rolling_rates: GameRollingRate[];
@@ -394,27 +394,27 @@ export async function suspendUser(userId: number, reason?: string) {
 }
 
 export async function updateBettingPermission(userId: number, gameCategory: string, isAllowed: boolean) {
-  return apiClient.put(`/api/v1/users/${userId}/betting-permissions`, { game_category: gameCategory, is_allowed: isAllowed });
+  return apiClient.put(`/api/v1/users/${userId}/betting-permissions`, [{ game_category: gameCategory, is_allowed: isAllowed }]);
 }
 
 export async function updateNullBettingConfig(userId: number, gameCategory: string, everyNBets: number, inheritToChildren: boolean) {
-  return apiClient.put(`/api/v1/users/${userId}/null-betting`, { game_category: gameCategory, every_n_bets: everyNBets, inherit_to_children: inheritToChildren });
+  return apiClient.put(`/api/v1/users/${userId}/null-betting`, [{ game_category: gameCategory, every_n_bets: everyNBets, inherit_to_children: inheritToChildren }]);
 }
 
 export async function updateGameRollingRate(userId: number, gameCategory: string, rollingRate: number, provider?: string) {
-  return apiClient.put(`/api/v1/users/${userId}/rolling-rates`, { game_category: gameCategory, provider: provider || null, rolling_rate: rollingRate });
+  return apiClient.put(`/api/v1/users/${userId}/rolling-rates`, [{ game_category: gameCategory, provider: provider || null, rolling_rate: rollingRate }]);
 }
 
-export async function createBankAccount(userId: number, data: { bank_name: string; account_number: string; holder_name: string; bank_code?: string; is_primary?: boolean }) {
-  return apiClient.post(`/api/v1/users/${userId}/bank-accounts`, data);
+export async function createWalletAddress(userId: number, data: { coin_type: string; network: string; address: string; label?: string; is_primary?: boolean }) {
+  return apiClient.post(`/api/v1/users/${userId}/wallet-addresses`, data);
 }
 
-export async function updateBankAccount(userId: number, accountId: number, data: Record<string, unknown>) {
-  return apiClient.put(`/api/v1/users/${userId}/bank-accounts/${accountId}`, data);
+export async function updateWalletAddress(userId: number, walletId: number, data: Record<string, unknown>) {
+  return apiClient.put(`/api/v1/users/${userId}/wallet-addresses/${walletId}`, data);
 }
 
-export async function deleteBankAccount(userId: number, accountId: number) {
-  return apiClient.delete(`/api/v1/users/${userId}/bank-accounts/${accountId}`);
+export async function deleteWalletAddress(userId: number, walletId: number) {
+  return apiClient.delete(`/api/v1/users/${userId}/wallet-addresses/${walletId}`);
 }
 
 export async function replyToInquiry(userId: number, inquiryId: number, content: string) {

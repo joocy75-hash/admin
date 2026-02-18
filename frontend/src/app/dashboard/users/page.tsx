@@ -24,12 +24,10 @@ const STATUS_STYLES: Record<string, { label: string; cls: string; dot: string }>
   pending:   { label: '대기', cls: 'text-blue-600',   dot: 'bg-blue-400' },
 };
 
-const DEPTH_ACCENT = ['#818cf8', '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa'];
-const DEPTH_ROW_BG = ['', 'bg-sky-50/40', 'bg-violet-50/30', 'bg-emerald-50/25', 'bg-orange-50/20', ''];
 
 const ROW_H = 44;
-const SLOT_W = 24;
-const ARM = 14;
+const SLOT_W = 28;
+const ARM = 10;
 const B = 0.75;
 
 function TreeConnectorSVG({ connectorLines, isLastChild }: { connectorLines: boolean[]; isLastChild: boolean }) {
@@ -245,19 +243,17 @@ export default function UsersPage() {
                   paginatedItems.map((user) => {
                     const depth = user.treeDepth;
                     const isCollapsed = collapsed.has(user.id);
-                    const accentColor = DEPTH_ACCENT[Math.min(depth, DEPTH_ACCENT.length - 1)] as string;
-                    const rowBg = DEPTH_ROW_BG[Math.min(depth, DEPTH_ROW_BG.length - 1)] as string;
                     const rankStyle = RANK_STYLES[user.rank];
                     const statusStyle = STATUS_STYLES[user.status];
 
                     return (
                       <tr
                         key={user.id}
-                        className={`transition-colors hover:bg-muted/40 cursor-pointer ${rowBg}`}
+                        className="transition-colors hover:bg-muted/40 cursor-pointer"
                         style={{ height: ROW_H, borderBottom: '1px solid hsl(var(--border) / 0.35)' }}
                         onClick={() => handleUserClick(user.id)}
                       >
-                        <td style={{ height: ROW_H, padding: '0 12px', verticalAlign: 'middle', borderLeft: `3px solid ${accentColor}` }}>
+                        <td style={{ height: ROW_H, padding: '0 12px', verticalAlign: 'middle' }}>
                           <span className="tabular-nums text-xs text-muted-foreground/50">{user.id}</span>
                         </td>
                         <td style={{ height: ROW_H, padding: 0, verticalAlign: 'middle' }}>

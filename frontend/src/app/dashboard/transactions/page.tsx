@@ -4,6 +4,16 @@ import { useState } from 'react';
 import { useTransactionList, approveTransaction, rejectTransaction } from '@/hooks/use-transactions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { AlertCircle, Receipt } from 'lucide-react';
 
 const TYPE_COLORS: Record<string, string> = {
@@ -25,6 +35,18 @@ export default function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [userIdFilter, setUserIdFilter] = useState('');
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmDesc, setConfirmDesc] = useState('');
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+
+  const openConfirm = (title: string, desc: string, action: () => void) => {
+    setConfirmTitle(title);
+    setConfirmDesc(desc);
+    setConfirmAction(() => action);
+    setConfirmOpen(true);
+  };
+
   const { data, loading, error, refetch } = useTransactionList({
     page,
     page_size: 20,
@@ -33,45 +55,68 @@ export default function TransactionsPage() {
     user_id: userIdFilter ? Number(userIdFilter) : undefined,
   });
 
-  const handleApprove = async (id: number) => {
-    if (!confirm('이 거래를 승인하시겠습니까?')) return;
-    try {
-      await approveTransaction(id);
-      refetch();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Approve failed');
-    }
+  const handleApprove = (id: number) => {
+    openConfirm('거래 승인', '이 거래를 승인하시겠습니까?', async () => {
+      try {
+        await approveTransaction(id);
+        refetch();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Approve failed');
+      }
+    });
   };
 
-  const handleReject = async (id: number) => {
-    if (!confirm('이 거래를 거부하시겠습니까?')) return;
-    try {
-      await rejectTransaction(id);
-      refetch();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Reject failed');
-    }
+  const handleReject = (id: number) => {
+    openConfirm('거래 거부', '이 거래를 거부하시겠습니까?', async () => {
+      try {
+        await rejectTransaction(id);
+        refetch();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Reject failed');
+      }
+    });
   };
 
   return (
     <div className="space-y-6">
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDesc}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { confirmAction?.(); setConfirmOpen(false); }}>
+              확인
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <h1 className="text-2xl font-bold">입출금 관리</h1>
 
       {/* Summary */}
       {data && (
         <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-lg border bg-blue-50 p-4">
-            <p className="text-xs text-blue-600">전체 건수</p>
-            <p className="text-xl font-bold text-blue-800">{data.total}</p>
-          </div>
-          <div className="rounded-lg border bg-green-50 p-4">
-            <p className="text-xs text-green-600">총 금액 (필터)</p>
-            <p className="text-xl font-bold text-green-800">{Number(data.total_amount).toLocaleString()}</p>
-          </div>
-          <div className="rounded-lg border bg-yellow-50 p-4">
-            <p className="text-xs text-yellow-600">현재 페이지</p>
-            <p className="text-xl font-bold text-yellow-800">{data.items.length}건</p>
-          </div>
+          <Card className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-blue-600 dark:text-blue-400">전체 건수</p>
+              <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{data.total}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-green-600 dark:text-green-400">총 금액 (필터)</p>
+              <p className="text-xl font-bold text-green-700 dark:text-green-300">{Number(data.total_amount).toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-900">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs text-yellow-600 dark:text-yellow-400">현재 페이지</p>
+              <p className="text-xl font-bold text-yellow-700 dark:text-yellow-300">{data.items.length}건</p>
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -80,7 +125,7 @@ export default function TransactionsPage() {
         <select
           value={typeFilter}
           onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="border rounded-md px-3 py-1.5 text-sm bg-background"
         >
           <option value="">전체 유형</option>
           <option value="deposit">입금</option>
@@ -91,19 +136,19 @@ export default function TransactionsPage() {
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="border rounded-md px-3 py-1.5 text-sm bg-background"
         >
           <option value="">전체 상태</option>
           <option value="pending">대기중</option>
           <option value="approved">승인</option>
           <option value="rejected">거부</option>
         </select>
-        <input
+        <Input
           type="number"
           value={userIdFilter}
           onChange={(e) => { setUserIdFilter(e.target.value); setPage(1); }}
           placeholder="회원 ID"
-          className="w-32 rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="w-32 h-9"
         />
       </div>
 
@@ -129,106 +174,97 @@ export default function TransactionsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">ID</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">회원</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">유형</th>
-                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-400">금액</th>
-                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-400">전 잔액</th>
-                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-400">후 잔액</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">상태</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">메모</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">일시</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">액션</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>회원</TableHead>
+                <TableHead>유형</TableHead>
+                <TableHead className="text-center">코인</TableHead>
+                <TableHead className="text-right">금액</TableHead>
+                <TableHead className="text-right">전 잔액</TableHead>
+                <TableHead className="text-right">후 잔액</TableHead>
+                <TableHead>상태</TableHead>
+                <TableHead>TX Hash</TableHead>
+                <TableHead>일시</TableHead>
+                <TableHead>액션</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data?.items.map((tx) => (
-                <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                  <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-500 dark:text-gray-400">{tx.id}</td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm font-medium">
+                <TableRow key={tx.id}>
+                  <TableCell className="text-muted-foreground">{tx.id}</TableCell>
+                  <TableCell className="font-medium">
                     {tx.user_username || tx.user_id}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${TYPE_COLORS[tx.type] || 'bg-gray-100'}`}>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={TYPE_COLORS[tx.type] || 'bg-gray-100 text-gray-800'} variant="secondary">
                       {tx.type}
-                    </span>
-                    <span className="ml-1 text-xs text-gray-400">({tx.action})</span>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right font-medium">
+                    </Badge>
+                    <span className="ml-1 text-xs text-muted-foreground">({tx.action})</span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {tx.coin_type ? (
+                      <span className="text-xs">{tx.coin_type}{tx.network ? ` (${tx.network})` : ''}</span>
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell className="text-right font-medium font-mono">
                     {Number(tx.amount).toLocaleString()}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500 dark:text-gray-400">
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground font-mono">
                     {Number(tx.balance_before).toLocaleString()}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500 dark:text-gray-400">
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground font-mono">
                     {Number(tx.balance_after).toLocaleString()}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_COLORS[tx.status] || 'bg-gray-100'}`}>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={STATUS_COLORS[tx.status] || 'bg-gray-100 text-gray-800'} variant="secondary">
                       {tx.status}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[150px] truncate">
-                    {tx.memo || '-'}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-xs text-gray-500 dark:text-gray-400">
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate font-mono">
+                    {tx.tx_hash ? tx.tx_hash.slice(0, 10) + '...' : (tx.memo || '-')}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
                     {new Date(tx.created_at).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm">
-                    {tx.status === 'pending' && (
+                  </TableCell>
+                  <TableCell>
+                    {tx.status === 'pending' ? (
                       <div className="flex gap-1">
-                        <button
-                          onClick={() => handleApprove(tx.id)}
-                          className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700"
-                        >
+                        <Button size="xs" onClick={() => handleApprove(tx.id)}>
                           승인
-                        </button>
-                        <button
-                          onClick={() => handleReject(tx.id)}
-                          className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
-                        >
+                        </Button>
+                        <Button variant="destructive" size="xs" onClick={() => handleReject(tx.id)}>
                           거부
-                        </button>
+                        </Button>
                       </div>
-                    )}
-                    {tx.status !== 'pending' && (
-                      <span className="text-xs text-gray-400">
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
                         {tx.processed_by_username || '-'}
                       </span>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 
       {/* Pagination */}
       {data && data.total > data.page_size && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">총 {data.total}건</p>
+          <p className="text-sm text-muted-foreground">총 {data.total}건</p>
           <div className="flex gap-2">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page <= 1}
-              className="rounded-md border px-3 py-1 text-sm disabled:opacity-50"
-            >
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>
               이전
-            </button>
-            <span className="px-3 py-1 text-sm">
+            </Button>
+            <span className="flex items-center text-sm text-muted-foreground">
               {data.page} / {Math.ceil(data.total / data.page_size)}
             </span>
-            <button
-              onClick={() => setPage(page + 1)}
-              disabled={page >= Math.ceil(data.total / data.page_size)}
-              className="rounded-md border px-3 py-1 text-sm disabled:opacity-50"
-            >
+            <Button variant="outline" size="sm" disabled={page >= Math.ceil(data.total / data.page_size)} onClick={() => setPage(page + 1)}>
               다음
-            </button>
+            </Button>
           </div>
         </div>
       )}

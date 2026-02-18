@@ -133,3 +133,82 @@ export async function deleteAgent(id: number) {
 export async function resetAgentPassword(id: number, newPassword: string) {
   return apiClient.post(`/api/v1/agents/${id}/reset-password`, { new_password: newPassword });
 }
+
+// ─── Commission Rates (Hierarchical) ────────────────────
+
+export type AgentCommissionRate = {
+  id: number;
+  agent_id: number;
+  game_category: string;
+  commission_type: string;
+  rate: number;
+  updated_at: string;
+  agent_username: string | null;
+  agent_code: string | null;
+};
+
+export function useAgentCommissionRates(agentId: number | null, commissionType?: string) {
+  const [rates, setRates] = useState<AgentCommissionRate[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetch = useCallback(async () => {
+    if (!agentId) return;
+    setLoading(true);
+    try {
+      const params = commissionType ? `?commission_type=${commissionType}` : '';
+      const result = await apiClient.get<AgentCommissionRate[]>(
+        `/api/v1/agents/${agentId}/commission-rates${params}`
+      );
+      setRates(result);
+    } catch { setRates([]); }
+    finally { setLoading(false); }
+  }, [agentId, commissionType]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { rates, loading, refetch: fetch };
+}
+
+export function useSubAgentRates(agentId: number | null, gameCategory?: string) {
+  const [rates, setRates] = useState<AgentCommissionRate[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetch = useCallback(async () => {
+    if (!agentId) return;
+    setLoading(true);
+    try {
+      const params = gameCategory ? `?game_category=${gameCategory}` : '';
+      const result = await apiClient.get<AgentCommissionRate[]>(
+        `/api/v1/agents/${agentId}/sub-agent-rates${params}`
+      );
+      setRates(result);
+    } catch { setRates([]); }
+    finally { setLoading(false); }
+  }, [agentId, gameCategory]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { rates, loading, refetch: fetch };
+}
+
+export async function setAgentCommissionRate(
+  agentId: number,
+  gameCategory: string,
+  commissionType: string,
+  rate: number,
+) {
+  return apiClient.put<AgentCommissionRate>(
+    `/api/v1/agents/${agentId}/commission-rates`,
+    { game_category: gameCategory, commission_type: commissionType, rate }
+  );
+}
+
+export async function setAgentCommissionRatesBulk(
+  agentId: number,
+  rates: { game_category: string; commission_type: string; rate: number }[],
+) {
+  return apiClient.put<AgentCommissionRate[]>(
+    `/api/v1/agents/${agentId}/commission-rates/bulk`,
+    { rates }
+  );
+}

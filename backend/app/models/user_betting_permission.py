@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
@@ -12,4 +12,4 @@ class UserBettingPermission(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", index=True)
     game_category: str = Field(max_length=30)
     is_allowed: bool = Field(default=True)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -5,6 +5,14 @@ import Link from 'next/link';
 import { usePolicyList, deletePolicy, type CommissionPolicy } from '@/hooks/use-commissions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { AlertCircle, Percent } from 'lucide-react';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -23,10 +31,19 @@ const CATEGORY_LABELS: Record<string, string> = {
   holdem: '홀덤',
 };
 
+const TYPE_BADGE_COLORS: Record<string, string> = {
+  rolling: 'bg-blue-100 text-blue-800',
+  losing: 'bg-red-100 text-red-800',
+  deposit: 'bg-green-100 text-green-800',
+};
+
 export default function CommissionPoliciesPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [page, setPage] = useState(1);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingPolicy, setPendingPolicy] = useState<CommissionPolicy | null>(null);
 
   const { data, loading, error, refetch } = usePolicyList({
     page,
@@ -35,14 +52,21 @@ export default function CommissionPoliciesPage() {
     game_category: categoryFilter || undefined,
   });
 
-  const handleDelete = async (policy: CommissionPolicy) => {
-    if (!confirm(`"${policy.name}" 정책을 비활성화합니다. 계속하시겠습니까?`)) return;
+  const handleDelete = (policy: CommissionPolicy) => {
+    setPendingPolicy(policy);
+    setConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingPolicy) return;
     try {
-      await deletePolicy(policy.id);
+      await deletePolicy(pendingPolicy.id);
       refetch();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Delete failed');
     }
+    setConfirmOpen(false);
+    setPendingPolicy(null);
   };
 
   const formatRates = (rates: Record<string, number>) => {
@@ -54,23 +78,32 @@ export default function CommissionPoliciesPage() {
 
   return (
     <div className="space-y-6">
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>정책 비활성화</AlertDialogTitle>
+            <AlertDialogDescription>
+              &quot;{pendingPolicy?.name}&quot; 정책을 비활성화합니다. 계속하시겠습니까?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>확인</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">커미션 정책</h1>
         <div className="flex gap-2">
           <Link href="/dashboard/commissions/overrides">
-            <button className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50 dark:bg-gray-900 dark:border-gray-700 dark:hover:bg-gray-800">
-              에이전트 오버라이드
-            </button>
+            <Button variant="outline">에이전트 오버라이드</Button>
           </Link>
           <Link href="/dashboard/commissions/ledger">
-            <button className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50 dark:bg-gray-900 dark:border-gray-700 dark:hover:bg-gray-800">
-              커미션 원장
-            </button>
+            <Button variant="outline">커미션 원장</Button>
           </Link>
           <Link href="/dashboard/commissions/new">
-            <button className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
-              + 정책 등록
-            </button>
+            <Button>+ 정책 등록</Button>
           </Link>
         </div>
       </div>
@@ -80,7 +113,7 @@ export default function CommissionPoliciesPage() {
         <select
           value={typeFilter}
           onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="border rounded-md px-3 py-1.5 text-sm bg-background"
         >
           <option value="">전체 유형</option>
           <option value="rolling">롤링</option>
@@ -90,7 +123,7 @@ export default function CommissionPoliciesPage() {
         <select
           value={categoryFilter}
           onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm dark:bg-gray-900 dark:border-gray-700"
+          className="border rounded-md px-3 py-1.5 text-sm bg-background"
         >
           <option value="">전체 카테고리</option>
           {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
@@ -120,94 +153,73 @@ export default function CommissionPoliciesPage() {
           <p className="text-sm">조건을 변경하거나 새로 등록해주세요.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border dark:border-gray-700">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">정책명</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">유형</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">카테고리</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">단계별 비율</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">최소 베팅</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">상태</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">우선순위</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">관리</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>정책명</TableHead>
+                <TableHead>유형</TableHead>
+                <TableHead>카테고리</TableHead>
+                <TableHead>단계별 비율</TableHead>
+                <TableHead>최소 베팅</TableHead>
+                <TableHead>상태</TableHead>
+                <TableHead className="text-center">우선순위</TableHead>
+                <TableHead>관리</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data?.items.map((policy) => (
-                <tr key={policy.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                  <td className="whitespace-nowrap px-4 py-3 text-sm font-medium">{policy.name}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm">
-                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                      policy.type === 'rolling' ? 'bg-blue-100 text-blue-800' :
-                      policy.type === 'losing' ? 'bg-red-100 text-red-800' :
-                      'bg-green-100 text-green-800'
-                    }`}>
+                <TableRow key={policy.id}>
+                  <TableCell className="font-medium">{policy.name}</TableCell>
+                  <TableCell>
+                    <Badge className={TYPE_BADGE_COLORS[policy.type] || 'bg-gray-100 text-gray-800'} variant="secondary">
                       {TYPE_LABELS[policy.type] || policy.type}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm">
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
                     {policy.game_category ? CATEGORY_LABELS[policy.game_category] || policy.game_category : (
-                      <span className="text-gray-400">전체</span>
+                      <span className="text-muted-foreground">전체</span>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{formatRates(policy.level_rates)}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm">
-                    {Number(policy.min_bet_amount).toLocaleString()}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm">
-                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                      policy.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{formatRates(policy.level_rates)}</TableCell>
+                  <TableCell>{Number(policy.min_bet_amount).toLocaleString()}</TableCell>
+                  <TableCell>
+                    <Badge className={policy.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} variant="secondary">
                       {policy.active ? '활성' : '비활성'}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-center">{policy.priority}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm">
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">{policy.priority}</TableCell>
+                  <TableCell>
                     <div className="flex gap-2">
                       <Link href={`/dashboard/commissions/${policy.id}`}>
-                        <button className="text-blue-600 hover:text-blue-800 dark:text-blue-400">수정</button>
+                        <Button variant="ghost" size="xs">수정</Button>
                       </Link>
-                      <button
-                        onClick={() => handleDelete(policy)}
-                        className="text-red-600 hover:text-red-800"
-                      >
+                      <Button variant="ghost" size="xs" className="text-red-600 hover:text-red-800" onClick={() => handleDelete(policy)}>
                         삭제
-                      </button>
+                      </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 
       {/* Pagination */}
       {data && data.total > data.page_size && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            전체: {data.total}건
-          </p>
+          <p className="text-sm text-muted-foreground">전체: {data.total}건</p>
           <div className="flex gap-2">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page <= 1}
-              className="rounded-md border px-3 py-1 text-sm disabled:opacity-50 dark:border-gray-700"
-            >
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(Math.max(1, page - 1))}>
               이전
-            </button>
-            <span className="px-3 py-1 text-sm">
+            </Button>
+            <span className="flex items-center text-sm text-muted-foreground">
               {data.page} / {Math.ceil(data.total / data.page_size)}
             </span>
-            <button
-              onClick={() => setPage(page + 1)}
-              disabled={page >= Math.ceil(data.total / data.page_size)}
-              className="rounded-md border px-3 py-1 text-sm disabled:opacity-50 dark:border-gray-700"
-            >
+            <Button variant="outline" size="sm" disabled={page >= Math.ceil(data.total / data.page_size)} onClick={() => setPage(page + 1)}>
               다음
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 # 통합 게임 관리자 패널 (Admin Panel)
 
-> **상태**: Phase 0~13 전체 완료 + 회원 상세 8탭 + 회원 목록 리뉴얼 완료 | Backend 133 routes | Frontend 41 routes + 8탭 + 슬라이드 패널
+> **상태**: Phase 0~13 전체 완료 + 회원 상세 8탭 + 회원 목록 리뉴얼 + 계층적 커미션 시스템 + 암호화폐 입출금 전환 | Backend 137 routes | Frontend 41 routes + 8탭 + 슬라이드 패널
 > **Phase 상세**: @docs/reference/phases-completed.md
 > **회원 상세 계획서**: @docs/plans/user-detail-plan.md
 
@@ -62,16 +62,22 @@ cd backend && source .venv/bin/activate && python scripts/seed.py
 ## 핵심 아키텍처
 
 - **에이전트 트리**: Closure Table (admin_user_tree) - 최대 6단계
-- **커미션**: 롤링(베팅금 %) + 죽장(손실금 %) - 게임 카테고리별 차등
-- **인증**: JWT RS256 + Refresh Token + 2FA TOTP
+- **커미션**: 계층적 워터폴 분배 → **상세: `.claude/skills/commission-logic/SKILL.md`**
+  - 롤링(베팅금 %) + 죽장(손실금 %) - 7게임 카테고리 × 에이전트별 독립 요율
+  - 워터폴: 각 에이전트 수령 = 자신 요율 - 자식 요율 (하위→상위 순)
+  - 검증: 자식 요율 ≤ 부모 요율 (부모 천장 + 자식 바닥)
+- **입출금**: 암호화폐 전용 (현금 계좌이체 없음) → **상세: `.claude/skills/crypto-payment/SKILL.md`**
+  - USDT(메인) + TRX/ETH/BTC/BNB(서브) | TRC20/ERC20/BEP20/BTC
+  - pending → approved/rejected 상태 머신, SELECT FOR UPDATE 잠금
+- **인증**: JWT HS256 + Refresh Token + 2FA TOTP
 - **권한**: RBAC 47개 퍼미션, PermissionChecker 의존성
 - **외부 연동**: BaseConnector 어댑터 패턴 (4 커넥터: casino/sports/slot/holdem)
 
 ## 회원 상세정보 강화 (2026-02-18)
 
 8탭 구조 전면 리뉴얼 완료:
-- **신규 테이블 11개**: user_login_history, user_bank_accounts, user_betting_permissions, user_null_betting_configs, user_game_rolling_rates, bet_records, money_logs, point_logs, inquiries, inquiry_replies, messages
-- **신규 API 22개**: /users/{id}/detail, /statistics, /bank-accounts(CRUD), /betting-permissions, /null-betting, /rolling-rates, /reset-password, /set-password, /suspend, /bets, /money-logs, /point-logs, /login-history, /inquiries(CRUD+reply), /messages(CRUD+read)
+- **신규 테이블 11개**: user_login_history, user_wallet_addresses, user_betting_permissions, user_null_betting_configs, user_game_rolling_rates, bet_records, money_logs, point_logs, inquiries, inquiry_replies, messages
+- **신규 API 22개**: /users/{id}/detail, /statistics, /wallet-addresses(CRUD), /betting-permissions, /null-betting, /rolling-rates, /reset-password, /set-password, /suspend, /bets, /money-logs, /point-logs, /login-history, /inquiries(CRUD+reply), /messages(CRUD+read)
 - **프론트엔드 파일**: `frontend/src/app/dashboard/users/[id]/` (page.tsx + tab-*.tsx 8개) + `frontend/src/hooks/use-user-detail.ts`
 - **8탭**: 기본정보, 베팅, 머니, 포인트, 입출금, 문의내역, 추천코드, 쪽지
 - **컬러 시스템**: Blue=긍정(활성/승인/지급), Red=부정(정지/회수/거부)
@@ -85,6 +91,33 @@ cd backend && source .venv/bin/activate && python scripts/seed.py
 - 슬라이드 패널: shadcn/ui Sheet (900px) - 8탭 재활용
 - 공유 컴포넌트: `frontend/src/components/user-detail-content.tsx`
 - 기존 `/dashboard/users/[id]` 페이지 유지 (직접 URL 접속용)
+
+## 암호화폐 입출금 전환 (2026-02-18)
+
+은행 계좌이체 → 암호화폐 전용 입출금으로 전면 전환:
+- **코인**: USDT(메인), TRX, ETH, BTC, BNB / **네트워크**: TRC20, ERC20, BEP20, BTC
+- **DB 변경**: `user_bank_accounts` → `user_wallet_addresses` (coin_type/network/address/label)
+- **User 모델**: `virtual_account_bank/number` → `deposit_address/deposit_network`
+- **Transaction 모델**: coin_type, network, tx_hash, wallet_address, confirmations 필드 추가
+- **API 변경**: `/users/{id}/bank-accounts` → `/users/{id}/wallet-addresses` (CRUD 4개)
+- **프론트엔드**: 계좌 UI → 지갑주소 UI, KRW 표시 → USDT 표시, TX Hash 복사 기능
+- **마이그레이션**: `d4e5f6g7h8i9_crypto_payment_conversion.py`
+
+## 텔레그램 알림 시스템 (2026-02-18)
+
+- **서비스**: `backend/app/services/telegram_service.py` (비동기 fire-and-forget)
+- **알림 템플릿**: `backend/app/services/notification_service.py`
+- **설정**: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (빈값이면 자동 비활성)
+- **트리거**: 입금/출금 신청, 승인/거부, 대규모 거래 감지, 신규 회원 가입
+- **연동 위치**: `backend/app/api/v1/finance.py`
+
+## 프로덕션 배포
+
+- **자동 마이그레이션**: `backend/entrypoint.sh` (Alembic upgrade head → uvicorn 시작)
+- **SSL**: `nginx/nginx-ssl.conf` (Let's Encrypt, HTTPS 강제 리다이렉트)
+- **백업**: `scripts/backup-db.sh` (pg_dump + gzip, 7일 자동 정리)
+- **환경변수**: `.env.prod.example` 참조 (DB_PASSWORD, SECRET_KEY 필수)
+- **보안**: prod compose에서 `${SECRET_KEY:?required}`, `${DB_PASSWORD:?required}` 강제
 
 ## 인수인계 문서
 

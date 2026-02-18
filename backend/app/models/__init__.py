@@ -1,5 +1,6 @@
 # Import all models so Alembic can discover them via SQLModel.metadata
 from app.models.admin_user import AdminUser, AdminUserTree  # noqa: F401
+from app.models.agent_commission_rate import AgentCommissionRate  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.bet_record import BetRecord  # noqa: F401
 from app.models.commission import (  # noqa: F401
@@ -22,7 +23,8 @@ from app.models.setting import AgentSalaryConfig, Announcement, Setting  # noqa:
 from app.models.settlement import Settlement  # noqa: F401
 from app.models.transaction import Transaction  # noqa: F401
 from app.models.user import User, UserTree  # noqa: F401
-from app.models.user_bank_account import UserBankAccount  # noqa: F401
+from app.models.user_bank_account import UserBankAccount  # noqa: F401  # legacy, kept for migration
+from app.models.user_wallet_address import UserWalletAddress  # noqa: F401
 from app.models.user_betting_permission import UserBettingPermission  # noqa: F401
 from app.models.user_game_rolling_rate import UserGameRollingRate  # noqa: F401
 from app.models.user_login_history import UserLoginHistory  # noqa: F401

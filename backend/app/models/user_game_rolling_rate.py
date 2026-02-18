@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import UniqueConstraint
@@ -14,4 +14,4 @@ class UserGameRollingRate(SQLModel, table=True):
     game_category: str = Field(max_length=30)
     provider: str | None = Field(default=None, max_length=50)
     rolling_rate: Decimal = Field(max_digits=5, decimal_places=2)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

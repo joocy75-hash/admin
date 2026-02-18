@@ -14,6 +14,11 @@ export type Transaction = {
   balance_before: number;
   balance_after: number;
   status: string;
+  coin_type: string | null;
+  network: string | null;
+  tx_hash: string | null;
+  wallet_address: string | null;
+  confirmations: number | null;
   reference_type: string | null;
   reference_id: string | null;
   memo: string | null;

@@ -1,20 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
-
-function getTokenFromStorage(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem('auth-storage');
-    if (!stored) return null;
-    const parsed = JSON.parse(stored);
-    return parsed?.state?.accessToken ?? null;
-  } catch {
-    return null;
-  }
-}
+import { API_BASE_URL, getToken } from '@/lib/api-client';
 
 export type SSEEvent = {
   type: string;
@@ -26,10 +13,10 @@ export function useSSE(onEvent?: (event: SSEEvent) => void) {
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback(() => {
-    const token = getTokenFromStorage();
+    const token = getToken();
     if (!token) return;
 
-    const url = `${API_BASE}/api/v1/events/stream?token=${encodeURIComponent(token)}`;
+    const url = `${API_BASE_URL}/api/v1/events/stream?token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
     esRef.current = es;
 

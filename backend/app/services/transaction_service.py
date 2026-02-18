@@ -1,7 +1,7 @@
 """Business logic for deposit, withdrawal, and balance adjustment."""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -12,7 +12,11 @@ from app.models.user import User
 from app.utils.events import publish_event
 
 
-async def create_deposit(session: AsyncSession, user_id: int, amount: Decimal, memo: str | None = None) -> Transaction:
+async def create_deposit(
+    session: AsyncSession, user_id: int, amount: Decimal, memo: str | None = None,
+    *, coin_type: str | None = None, network: str | None = None,
+    tx_hash: str | None = None, wallet_address: str | None = None,
+) -> Transaction:
     user = await session.get(User, user_id)
     if not user:
         raise ValueError("User not found")
@@ -25,6 +29,10 @@ async def create_deposit(session: AsyncSession, user_id: int, amount: Decimal, m
         balance_before=user.balance,
         balance_after=user.balance,  # Not applied yet
         status="pending",
+        coin_type=coin_type,
+        network=network,
+        tx_hash=tx_hash,
+        wallet_address=wallet_address,
         memo=memo,
     )
     session.add(tx)
@@ -34,8 +42,14 @@ async def create_deposit(session: AsyncSession, user_id: int, amount: Decimal, m
     return tx
 
 
-async def create_withdrawal(session: AsyncSession, user_id: int, amount: Decimal, memo: str | None = None) -> Transaction:
-    user = await session.get(User, user_id)
+async def create_withdrawal(
+    session: AsyncSession, user_id: int, amount: Decimal, memo: str | None = None,
+    *, coin_type: str | None = None, network: str | None = None,
+    wallet_address: str | None = None,
+) -> Transaction:
+    # Lock user row to prevent concurrent balance modifications
+    user_stmt = select(User).where(User.id == user_id).with_for_update()
+    user = (await session.execute(user_stmt)).scalar_one_or_none()
     if not user:
         raise ValueError("User not found")
     if user.balance < amount:
@@ -49,6 +63,9 @@ async def create_withdrawal(session: AsyncSession, user_id: int, amount: Decimal
         balance_before=user.balance,
         balance_after=user.balance,  # Not applied yet
         status="pending",
+        coin_type=coin_type,
+        network=network,
+        wallet_address=wallet_address,
         memo=memo,
     )
     session.add(tx)
@@ -83,8 +100,8 @@ async def approve_transaction(session: AsyncSession, tx_id: int, admin_id: int) 
     tx.balance_after = user.balance
     tx.status = "approved"
     tx.processed_by = admin_id
-    tx.processed_at = datetime.utcnow()
-    user.updated_at = datetime.utcnow()
+    tx.processed_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc)
 
     session.add(tx)
     session.add(user)
@@ -104,7 +121,7 @@ async def reject_transaction(session: AsyncSession, tx_id: int, admin_id: int, m
 
     tx.status = "rejected"
     tx.processed_by = admin_id
-    tx.processed_at = datetime.utcnow()
+    tx.processed_at = datetime.now(timezone.utc)
     if memo:
         tx.memo = memo
 
@@ -144,10 +161,10 @@ async def create_adjustment(
         balance_after=user.balance,
         status="approved",
         processed_by=admin_id,
-        processed_at=datetime.utcnow(),
+        processed_at=datetime.now(timezone.utc),
         memo=memo,
     )
     session.add(tx)
     session.add(user)
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     return tx

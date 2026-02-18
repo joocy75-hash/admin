@@ -163,27 +163,31 @@ async def get_partner_users(
     result = await session.execute(stmt)
     users = result.scalars().all()
 
-    # Get bet/win totals per user
+    # Batch query: get bet/win totals for all users at once
+    user_ids = [u.id for u in users]
+    stats_map: dict[int, tuple[float, float]] = {}
+    if user_ids:
+        bet_stats = (await session.execute(
+            select(
+                GameRound.user_id,
+                func.coalesce(func.sum(GameRound.bet_amount), 0),
+                func.coalesce(func.sum(GameRound.win_amount), 0),
+            )
+            .where(GameRound.user_id.in_(user_ids))
+            .group_by(GameRound.user_id)
+        )).all()
+        stats_map = {row[0]: (float(row[1]), float(row[2])) for row in bet_stats}
+
     items = []
     for u in users:
-        bet_sum = (await session.execute(
-            select(func.coalesce(func.sum(GameRound.bet_amount), 0)).where(
-                GameRound.user_id == u.id
-            )
-        )).scalar() or 0
-        win_sum = (await session.execute(
-            select(func.coalesce(func.sum(GameRound.win_amount), 0)).where(
-                GameRound.user_id == u.id
-            )
-        )).scalar() or 0
-
+        bet_sum, win_sum = stats_map.get(u.id, (0.0, 0.0))
         items.append(PartnerUserItem(
             id=u.id,
             username=u.username,
             status=u.status,
             balance=float(u.balance),
-            total_bet=float(bet_sum),
-            total_win=float(win_sum),
+            total_bet=bet_sum,
+            total_win=win_sum,
             created_at=u.created_at,
         ))
 

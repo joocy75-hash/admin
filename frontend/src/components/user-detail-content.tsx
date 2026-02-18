@@ -4,6 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { useUserDetail, resetUserPassword, setUserPassword, suspendUser } from '@/hooks/use-user-detail';
 import { updateUser } from '@/hooks/use-users';
 import { ArrowLeft, X, Edit, KeyRound, Lock, Ban } from 'lucide-react';
@@ -46,14 +50,27 @@ export function UserDetailContent({ userId, onClose, isSheet }: Props) {
   const { data: detail, loading, refetch } = useUserDetail(userId);
   const [tab, setTab] = useState<TabKey>('general');
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmDesc, setConfirmDesc] = useState('');
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+
+  const openConfirm = (title: string, desc: string, action: () => void) => {
+    setConfirmTitle(title);
+    setConfirmDesc(desc);
+    setConfirmAction(() => action);
+    setConfirmOpen(true);
+  };
+
   const user = detail?.user;
 
   const handleResetPassword = async () => {
-    if (!confirm('비밀번호를 초기화하시겠습니까?')) return;
-    try {
-      await resetUserPassword(userId);
-      alert('비밀번호가 초기화되었습니다.');
-    } catch { alert('비밀번호 초기화 실패'); }
+    openConfirm('비밀번호 초기화', '비밀번호를 초기화하시겠습니까?', async () => {
+      try {
+        await resetUserPassword(userId);
+        alert('비밀번호가 초기화되었습니다.');
+      } catch { alert('비밀번호 초기화 실패'); }
+    });
   };
 
   const handleSetPassword = async () => {
@@ -68,11 +85,12 @@ export function UserDetailContent({ userId, onClose, isSheet }: Props) {
   const handleSuspend = async () => {
     if (!user) return;
     if (user.status === 'suspended') {
-      if (!confirm('정지를 해제하시겠습니까?')) return;
-      try {
-        await updateUser(userId, { status: 'active' });
-        refetch();
-      } catch { alert('정지 해제 실패'); }
+      openConfirm('정지 해제', '정지를 해제하시겠습니까?', async () => {
+        try {
+          await updateUser(userId, { status: 'active' });
+          refetch();
+        } catch { alert('정지 해제 실패'); }
+      });
     } else {
       const reason = prompt('정지 사유를 입력하세요:');
       if (reason === null) return;
@@ -97,6 +115,21 @@ export function UserDetailContent({ userId, onClose, isSheet }: Props) {
 
   return (
     <div className="flex flex-col h-full">
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDesc}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { confirmAction?.(); setConfirmOpen(false); }}>
+              확인
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Common Header */}
       <div className="flex items-start justify-between p-4 border-b shrink-0">
         <div className="flex items-center gap-3">

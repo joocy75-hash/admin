@@ -27,6 +27,7 @@ from app.services.transaction_service import (
     create_withdrawal,
     reject_transaction,
 )
+from app.services import notification_service
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 
@@ -45,6 +46,11 @@ async def _build_response(session: AsyncSession, tx: Transaction) -> Transaction
         balance_before=tx.balance_before,
         balance_after=tx.balance_after,
         status=tx.status,
+        coin_type=tx.coin_type,
+        network=tx.network,
+        tx_hash=tx.tx_hash,
+        wallet_address=tx.wallet_address,
+        confirmations=tx.confirmations,
         reference_type=tx.reference_type,
         reference_id=tx.reference_id,
         memo=tx.memo,
@@ -107,21 +113,8 @@ async def list_transactions(
     )
 
 
-# ─── Get One ────────────────────────────────────────────────────────
-
-@router.get("/transactions/{tx_id}", response_model=TransactionResponse)
-async def get_transaction(
-    tx_id: int,
-    session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("transaction.view")),
-):
-    tx = await session.get(Transaction, tx_id)
-    if not tx:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    return await _build_response(session, tx)
-
-
 # ─── Summary ────────────────────────────────────────────────────────
+# NOTE: Fixed path must be registered BEFORE {tx_id} to avoid "summary" being captured as tx_id
 
 @router.get("/transactions/summary", response_model=list[TransactionSummary])
 async def transaction_summary(
@@ -146,6 +139,20 @@ async def transaction_summary(
     ]
 
 
+# ─── Get One ────────────────────────────────────────────────────────
+
+@router.get("/transactions/{tx_id}", response_model=TransactionResponse)
+async def get_transaction(
+    tx_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: AdminUser = Depends(PermissionChecker("transaction.view")),
+):
+    tx = await session.get(Transaction, tx_id)
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return await _build_response(session, tx)
+
+
 # ─── Deposit ────────────────────────────────────────────────────────
 
 @router.post("/deposit", response_model=TransactionResponse, status_code=201)
@@ -155,10 +162,19 @@ async def request_deposit(
     current_user: AdminUser = Depends(PermissionChecker("transaction.create")),
 ):
     try:
-        tx = await create_deposit(session, body.user_id, body.amount, body.memo)
+        tx = await create_deposit(
+            session, body.user_id, body.amount, body.memo,
+            coin_type=body.coin_type, network=body.network,
+            tx_hash=body.tx_hash, wallet_address=body.wallet_address,
+        )
         await session.commit()
         await session.refresh(tx)
-        return await _build_response(session, tx)
+        resp = await _build_response(session, tx)
+        user = await session.get(User, body.user_id)
+        coin = body.coin_type or "USDT"
+        notification_service.notify_deposit_request(user.username, body.amount, coin)
+        notification_service.notify_large_transaction("deposit", user.username, body.amount, coin)
+        return resp
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -172,10 +188,19 @@ async def request_withdrawal(
     current_user: AdminUser = Depends(PermissionChecker("transaction.create")),
 ):
     try:
-        tx = await create_withdrawal(session, body.user_id, body.amount, body.memo)
+        tx = await create_withdrawal(
+            session, body.user_id, body.amount, body.memo,
+            coin_type=body.coin_type, network=body.network,
+            wallet_address=body.wallet_address,
+        )
         await session.commit()
         await session.refresh(tx)
-        return await _build_response(session, tx)
+        resp = await _build_response(session, tx)
+        user = await session.get(User, body.user_id)
+        coin = body.coin_type or "USDT"
+        notification_service.notify_withdrawal_request(user.username, body.amount, coin)
+        notification_service.notify_large_transaction("withdrawal", user.username, body.amount, coin)
+        return resp
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -211,7 +236,10 @@ async def approve_tx(
         tx = await approve_transaction(session, tx_id, current_user.id)
         await session.commit()
         await session.refresh(tx)
-        return await _build_response(session, tx)
+        resp = await _build_response(session, tx)
+        user = await session.get(User, tx.user_id)
+        notification_service.notify_transaction_approved(tx.type, user.username, tx.amount, tx.coin_type or "USDT")
+        return resp
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -229,6 +257,9 @@ async def reject_tx(
         tx = await reject_transaction(session, tx_id, current_user.id, body.memo)
         await session.commit()
         await session.refresh(tx)
-        return await _build_response(session, tx)
+        resp = await _build_response(session, tx)
+        user = await session.get(User, tx.user_id)
+        notification_service.notify_transaction_rejected(tx.type, user.username, tx.amount, body.memo or "")
+        return resp
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

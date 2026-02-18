@@ -1,14 +1,16 @@
-"""Agent CRUD and tree management endpoints."""
+"""Agent CRUD, tree management, and commission rate endpoints."""
 
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 from app.api.deps import PermissionChecker, get_current_user
 from app.models.admin_user import AdminUser, AdminUserTree
+from app.models.agent_commission_rate import AgentCommissionRate
 from app.models.role import AdminUserRole, Role
 from app.schemas.agent import (
     AgentCreate,
@@ -20,6 +22,11 @@ from app.schemas.agent import (
     AgentTreeResponse,
     PasswordResetRequest,
 )
+from app.schemas.commission import (
+    AgentCommissionRateResponse,
+    AgentCommissionRateUpdate,
+    AgentCommissionRateBulkUpdate,
+)
 from app.services.tree_service import (
     insert_node,
     get_descendants,
@@ -30,13 +37,16 @@ from app.services.tree_service import (
     move_node,
     is_ancestor,
 )
+from app.services.commission_engine import (
+    validate_rate_against_parent,
+    validate_rate_against_children,
+)
 from app.utils.security import hash_password
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-async def _build_agent_response(session: AsyncSession, user: AdminUser) -> AgentResponse:
-    children_count = await get_descendant_count(session, user.id)
+def _to_agent_response(user: AdminUser, children_count: int = 0) -> AgentResponse:
     return AgentResponse(
         id=user.id,
         username=user.username,
@@ -59,6 +69,29 @@ async def _build_agent_response(session: AsyncSession, user: AdminUser) -> Agent
         updated_at=user.updated_at,
         children_count=children_count,
     )
+
+
+async def _build_agent_response(session: AsyncSession, user: AdminUser) -> AgentResponse:
+    children_count = await get_descendant_count(session, user.id)
+    return _to_agent_response(user, children_count)
+
+
+async def _batch_descendant_counts(session: AsyncSession, user_ids: list[int]) -> dict[int, int]:
+    """Batch query descendant counts for multiple agents via Closure Table."""
+    if not user_ids:
+        return {}
+    result = await session.execute(
+        select(
+            AdminUserTree.ancestor_id,
+            func.count(),
+        )
+        .where(
+            AdminUserTree.ancestor_id.in_(user_ids),
+            AdminUserTree.depth > 0,
+        )
+        .group_by(AdminUserTree.ancestor_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
 
 
 # ─── List ────────────────────────────────────────────────────────────
@@ -102,9 +135,9 @@ async def list_agents(
     result = await session.execute(stmt)
     users = result.scalars().all()
 
-    items = []
-    for u in users:
-        items.append(await _build_agent_response(session, u))
+    user_ids = [u.id for u in users]
+    counts_map = await _batch_descendant_counts(session, user_ids)
+    items = [_to_agent_response(u, counts_map.get(u.id, 0)) for u in users]
 
     return AgentListResponse(items=items, total=total, page=page, page_size=page_size)
 
@@ -208,7 +241,7 @@ async def update_agent(
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(user, field, value)
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
 
     session.add(user)
     await session.commit()
@@ -232,7 +265,7 @@ async def delete_agent(
         raise HTTPException(status_code=400, detail="Cannot delete super_admin")
 
     user.status = "banned"
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     session.add(user)
     await session.commit()
 
@@ -251,7 +284,7 @@ async def reset_agent_password(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     user.password_hash = hash_password(body.new_password)
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     session.add(user)
     await session.commit()
     return {"detail": "Password reset successfully"}
@@ -311,10 +344,9 @@ async def get_agent_children(
         raise HTTPException(status_code=404, detail="Agent not found")
 
     children = await get_children(session, agent_id)
-    items = []
-    for c in children:
-        items.append(await _build_agent_response(session, c))
-    return items
+    child_ids = [c.id for c in children]
+    counts_map = await _batch_descendant_counts(session, child_ids)
+    return [_to_agent_response(c, counts_map.get(c.id, 0)) for c in children]
 
 
 # ─── Tree: Move ──────────────────────────────────────────────────────
@@ -345,3 +377,233 @@ async def move_agent(
     await session.commit()
 
     return {"detail": "Agent moved successfully"}
+
+
+# ─── Commission Rates (Hierarchical) ─────────────────────────────
+
+GAME_CATEGORIES = ["casino", "slot", "mini_game", "virtual_soccer", "sports", "esports", "holdem"]
+COMMISSION_TYPES = ["rolling", "losing"]
+
+
+@router.get("/{agent_id}/commission-rates", response_model=list[AgentCommissionRateResponse])
+async def get_agent_commission_rates(
+    agent_id: int,
+    commission_type: str | None = Query(None, pattern=r"^(rolling|losing)$"),
+    session: AsyncSession = Depends(get_session),
+    current_user: AdminUser = Depends(PermissionChecker("commissions.view")),
+):
+    """Get all commission rates for an agent, grouped by game category and type."""
+    user = await session.get(AdminUser, agent_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    stmt = (
+        select(AgentCommissionRate)
+        .where(AgentCommissionRate.agent_id == agent_id)
+    )
+    if commission_type:
+        stmt = stmt.where(AgentCommissionRate.commission_type == commission_type)
+
+    stmt = stmt.order_by(AgentCommissionRate.game_category, AgentCommissionRate.commission_type)
+    result = await session.execute(stmt)
+    rates = result.scalars().all()
+
+    return [
+        AgentCommissionRateResponse(
+            id=r.id,
+            agent_id=r.agent_id,
+            game_category=r.game_category,
+            commission_type=r.commission_type,
+            rate=r.rate,
+            updated_at=r.updated_at,
+            agent_username=user.username,
+            agent_code=user.agent_code,
+        )
+        for r in rates
+    ]
+
+
+@router.put("/{agent_id}/commission-rates", response_model=AgentCommissionRateResponse)
+async def set_agent_commission_rate(
+    agent_id: int,
+    body: AgentCommissionRateUpdate,
+    session: AsyncSession = Depends(get_session),
+    current_user: AdminUser = Depends(PermissionChecker("commissions.update")),
+):
+    """Set a single commission rate for an agent.
+    Validates: rate <= parent's rate for same category/type."""
+    user = await session.get(AdminUser, agent_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Validate against parent ceiling
+    is_valid, error_msg = await validate_rate_against_parent(
+        session, agent_id, body.game_category, body.commission_type, body.rate
+    )
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+
+    # Validate against children floor
+    is_valid, error_msg = await validate_rate_against_children(
+        session, agent_id, body.game_category, body.commission_type, body.rate
+    )
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error_msg)
+
+    # Upsert
+    stmt = select(AgentCommissionRate).where(
+        and_(
+            AgentCommissionRate.agent_id == agent_id,
+            AgentCommissionRate.game_category == body.game_category,
+            AgentCommissionRate.commission_type == body.commission_type,
+        )
+    )
+    result = await session.execute(stmt)
+    rate_row = result.scalar_one_or_none()
+
+    if rate_row:
+        rate_row.rate = body.rate
+        rate_row.updated_at = datetime.now(timezone.utc)
+        rate_row.updated_by = current_user.id
+    else:
+        rate_row = AgentCommissionRate(
+            agent_id=agent_id,
+            game_category=body.game_category,
+            commission_type=body.commission_type,
+            rate=body.rate,
+            updated_by=current_user.id,
+        )
+        session.add(rate_row)
+
+    await session.commit()
+    await session.refresh(rate_row)
+
+    return AgentCommissionRateResponse(
+        id=rate_row.id,
+        agent_id=rate_row.agent_id,
+        game_category=rate_row.game_category,
+        commission_type=rate_row.commission_type,
+        rate=rate_row.rate,
+        updated_at=rate_row.updated_at,
+        agent_username=user.username,
+        agent_code=user.agent_code,
+    )
+
+
+@router.put("/{agent_id}/commission-rates/bulk", response_model=list[AgentCommissionRateResponse])
+async def set_agent_commission_rates_bulk(
+    agent_id: int,
+    body: AgentCommissionRateBulkUpdate,
+    session: AsyncSession = Depends(get_session),
+    current_user: AdminUser = Depends(PermissionChecker("commissions.update")),
+):
+    """Set multiple commission rates at once. All-or-nothing validation."""
+    user = await session.get(AdminUser, agent_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Validate all rates first
+    for item in body.rates:
+        is_valid, error_msg = await validate_rate_against_parent(
+            session, agent_id, item.game_category, item.commission_type, item.rate
+        )
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        is_valid, error_msg = await validate_rate_against_children(
+            session, agent_id, item.game_category, item.commission_type, item.rate
+        )
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+
+    # Apply all
+    results = []
+    for item in body.rates:
+        stmt = select(AgentCommissionRate).where(
+            and_(
+                AgentCommissionRate.agent_id == agent_id,
+                AgentCommissionRate.game_category == item.game_category,
+                AgentCommissionRate.commission_type == item.commission_type,
+            )
+        )
+        result = await session.execute(stmt)
+        rate_row = result.scalar_one_or_none()
+
+        if rate_row:
+            rate_row.rate = item.rate
+            rate_row.updated_at = datetime.now(timezone.utc)
+            rate_row.updated_by = current_user.id
+        else:
+            rate_row = AgentCommissionRate(
+                agent_id=agent_id,
+                game_category=item.game_category,
+                commission_type=item.commission_type,
+                rate=item.rate,
+                updated_by=current_user.id,
+            )
+            session.add(rate_row)
+
+        await session.flush()
+        await session.refresh(rate_row)
+        results.append(rate_row)
+
+    await session.commit()
+
+    return [
+        AgentCommissionRateResponse(
+            id=r.id,
+            agent_id=r.agent_id,
+            game_category=r.game_category,
+            commission_type=r.commission_type,
+            rate=r.rate,
+            updated_at=r.updated_at,
+            agent_username=user.username,
+            agent_code=user.agent_code,
+        )
+        for r in results
+    ]
+
+
+@router.get("/{agent_id}/sub-agent-rates")
+async def get_sub_agent_rates(
+    agent_id: int,
+    game_category: str | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+    current_user: AdminUser = Depends(PermissionChecker("commissions.view")),
+):
+    """Get commission rates for all direct children of an agent.
+    Useful for viewing what rates the agent has assigned to sub-agents."""
+    user = await session.get(AdminUser, agent_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    children = await get_children(session, agent_id)
+    if not children:
+        return []
+
+    child_ids = [c.id for c in children]
+    stmt = (
+        select(AgentCommissionRate, AdminUser.username, AdminUser.agent_code)
+        .join(AdminUser, AdminUser.id == AgentCommissionRate.agent_id)
+        .where(AgentCommissionRate.agent_id.in_(child_ids))
+    )
+    if game_category:
+        stmt = stmt.where(AgentCommissionRate.game_category == game_category)
+
+    stmt = stmt.order_by(AdminUser.agent_code, AgentCommissionRate.game_category)
+    result = await session.execute(stmt)
+    rows = result.all()
+
+    return [
+        AgentCommissionRateResponse(
+            id=row[0].id,
+            agent_id=row[0].agent_id,
+            game_category=row[0].game_category,
+            commission_type=row[0].commission_type,
+            rate=row[0].rate,
+            updated_at=row[0].updated_at,
+            agent_username=row[1],
+            agent_code=row[2],
+        )
+        for row in rows
+    ]
