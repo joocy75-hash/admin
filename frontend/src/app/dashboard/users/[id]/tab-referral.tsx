@@ -2,9 +2,10 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useUserTree } from '@/hooks/use-users';
 import type { UserDetailData } from '@/hooks/use-user-detail';
-import { Users, Link } from 'lucide-react';
+import { Users, Link, UserX } from 'lucide-react';
 
 const RANK_LABELS: Record<string, string> = {
   sub_hq: '부본사', distributor: '총판', agency: '대리점',
@@ -26,35 +27,38 @@ export default function TabReferral({ userId, detail }: Props) {
   return (
     <div className="space-y-4">
       {/* Referral Code */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">추천 정보</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">본인 추천 코드</p>
-              <div className="flex items-center gap-2">
-                <Link className="h-4 w-4 text-blue-500" />
-                <span className="text-lg font-bold">{user.username}</span>
-              </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900">
+          <CardContent className="pt-6">
+            <p className="text-xs text-green-600 dark:text-green-400">본인 추천 코드</p>
+            <div className="flex items-center gap-2 mt-1">
+              <Link className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <span className="text-lg font-bold text-green-700 dark:text-green-300">{user.username}</span>
             </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">추천인</p>
-              <span className="text-lg">{user.referrer_username || '없음'}</span>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-xs text-muted-foreground">추천인</p>
+            <span className="text-lg mt-1 block">{user.referrer_username || '없음'}</span>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900">
+          <CardContent className="pt-6">
+            <p className="text-xs text-blue-600 dark:text-blue-400">하부 회원 수</p>
+            <div className="flex items-center gap-2 mt-1">
+              <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="text-lg font-bold text-blue-700 dark:text-blue-300">{user.direct_referral_count}명</span>
             </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">하부 회원 수</p>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-blue-500" />
-                <span className="text-lg font-bold">{user.direct_referral_count}명</span>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">전체 하위 회원 수</p>
-              <span className="text-lg font-bold">{nodes.length > 0 ? nodes.length - 1 : 0}명</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        <Card className="bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900">
+          <CardContent className="pt-6">
+            <p className="text-xs text-purple-600 dark:text-purple-400">전체 하위 회원</p>
+            <span className="text-lg font-bold text-purple-700 dark:text-purple-300 mt-1 block">{nodes.length > 0 ? nodes.length - 1 : 0}명</span>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Rolling/Losing Settings */}
       <Card>
@@ -80,9 +84,16 @@ export default function TabReferral({ userId, detail }: Props) {
         <CardHeader><CardTitle className="text-base">직접 추천 회원 목록</CardTitle></CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
           ) : directChildren.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">직접 추천 회원이 없습니다</div>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <UserX className="h-10 w-10 mb-3" />
+              <p className="text-base font-medium">직접 추천 회원이 없습니다</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

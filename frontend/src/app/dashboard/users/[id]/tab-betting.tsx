@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useUserBets } from '@/hooks/use-user-detail';
+import { Dices } from 'lucide-react';
 
 const CATEGORY_LABELS: Record<string, string> = {
   casino: '카지노', slot: '슬롯', holdem: '홀덤', sports: '스포츠',
@@ -68,17 +70,17 @@ export default function TabBetting({ userId }: Props) {
       {/* Summary */}
       {summary && (
         <div className="grid grid-cols-3 gap-4">
-          <Card><CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">총 베팅</p>
-            <p className="text-xl font-bold text-blue-600">{formatKRW(summary.total_bet)}</p>
+          <Card className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900"><CardContent className="pt-6">
+            <p className="text-xs text-blue-600 dark:text-blue-400">총 베팅</p>
+            <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{formatKRW(summary.total_bet)}</p>
           </CardContent></Card>
-          <Card><CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">총 당첨액</p>
-            <p className="text-xl font-bold text-blue-600">{formatKRW(summary.total_win)}</p>
+          <Card className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900"><CardContent className="pt-6">
+            <p className="text-xs text-green-600 dark:text-green-400">총 당첨액</p>
+            <p className="text-xl font-bold text-green-700 dark:text-green-300">{formatKRW(summary.total_win)}</p>
           </CardContent></Card>
-          <Card><CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">손익</p>
-            <p className={`text-xl font-bold ${summary.net_profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+          <Card className={`${summary.net_profit >= 0 ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900' : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900'}`}><CardContent className="pt-6">
+            <p className={`text-xs ${summary.net_profit >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>손익</p>
+            <p className={`text-xl font-bold ${summary.net_profit >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-red-700 dark:text-red-300'}`}>
               {formatKRW(summary.net_profit)}
             </p>
           </CardContent></Card>
@@ -116,9 +118,17 @@ export default function TabBetting({ userId }: Props) {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
           ) : !data?.items.length ? (
-            <div className="p-8 text-center text-muted-foreground">베팅 내역이 없습니다</div>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Dices className="h-10 w-10 mb-3" />
+              <p className="text-base font-medium">베팅 내역이 없습니다</p>
+              <p className="text-sm">조건을 변경해주세요.</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

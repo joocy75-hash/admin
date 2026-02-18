@@ -1,5 +1,7 @@
 """Finance/Transaction management endpoints."""
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,6 +64,8 @@ async def list_transactions(
     type_filter: str | None = Query(None, alias="type"),
     status_filter: str | None = Query(None, alias="status"),
     user_id: int | None = Query(None),
+    start_date: str | None = Query(None, description="YYYY-MM-DD"),
+    end_date: str | None = Query(None, description="YYYY-MM-DD"),
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("transaction.view")),
 ):
@@ -72,6 +76,18 @@ async def list_transactions(
         base = base.where(Transaction.status == status_filter)
     if user_id:
         base = base.where(Transaction.user_id == user_id)
+    if start_date:
+        start_dt = datetime.combine(
+            datetime.strptime(start_date, "%Y-%m-%d").date(),
+            datetime.min.time(),
+        )
+        base = base.where(Transaction.created_at >= start_dt)
+    if end_date:
+        end_dt = datetime.combine(
+            datetime.strptime(end_date, "%Y-%m-%d").date(),
+            datetime.max.time(),
+        )
+        base = base.where(Transaction.created_at <= end_dt)
 
     count_stmt = select(func.count()).select_from(base.subquery())
     total = (await session.execute(count_stmt)).scalar() or 0

@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAgentList, deleteAgent, type Agent } from '@/hooks/use-agents';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Plus,
   Search,
@@ -24,6 +25,8 @@ import {
   Network,
   Eye,
   Trash2,
+  AlertCircle,
+  Users,
 } from 'lucide-react';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -47,7 +50,7 @@ export default function AgentsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
 
-  const { data, loading, refetch } = useAgentList({
+  const { data, loading, error, refetch } = useAgentList({
     page,
     page_size: 20,
     search: search || undefined,
@@ -120,11 +123,27 @@ export default function AgentsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="py-8 text-center text-muted-foreground">로딩 중...</div>
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-12 text-destructive">
+              <AlertCircle className="h-12 w-12 mb-4" />
+              <p className="text-lg font-medium">데이터를 불러오지 못했습니다</p>
+              <p className="text-sm text-muted-foreground mt-1">{error}</p>
+              <Button variant="outline" className="mt-4" onClick={refetch}>다시 시도</Button>
+            </div>
           ) : !data || data.items.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">에이전트가 없습니다</div>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Users className="h-12 w-12 mb-4" />
+              <p className="text-lg font-medium">에이전트가 없습니다</p>
+              <p className="text-sm">검색 조건을 변경하거나 새로 등록해주세요.</p>
+            </div>
           ) : (
             <>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -190,6 +209,7 @@ export default function AgentsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
 
               <div className="flex items-center justify-between mt-4">
                 <p className="text-sm text-muted-foreground">

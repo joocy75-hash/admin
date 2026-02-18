@@ -129,12 +129,18 @@ async def create_agent(
     # Validate parent
     parent_depth = 0
     if body.parent_id:
-        parent = await session.get(AdminUser, body.parent_id)
+        # Lock parent row to prevent race condition on max_sub_agents check
+        parent_stmt = (
+            select(AdminUser)
+            .where(AdminUser.id == body.parent_id)
+            .with_for_update()
+        )
+        parent = (await session.execute(parent_stmt)).scalar_one_or_none()
         if not parent:
             raise HTTPException(status_code=400, detail="Parent not found")
         if parent.depth >= 5:
             raise HTTPException(status_code=400, detail="Maximum tree depth (6 levels) exceeded")
-        # Check sub-agent limit
+        # Check sub-agent limit with locked parent
         children = await get_children(session, body.parent_id)
         if len(children) >= parent.max_sub_agents:
             raise HTTPException(status_code=400, detail="Parent max_sub_agents limit reached")

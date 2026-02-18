@@ -5,7 +5,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useUserMoneyLogs } from '@/hooks/use-user-detail';
+import { Wallet } from 'lucide-react';
 
 const TYPE_LABELS: Record<string, string> = {
   deposit: '입금', withdrawal: '출금', adjustment: '조정', bet: '베팅',
@@ -65,17 +67,17 @@ export default function TabMoney({ userId }: Props) {
       {/* Summary */}
       {summary && (
         <div className="grid grid-cols-3 gap-4">
-          <Card><CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">현재 잔액</p>
-            <p className="text-xl font-bold text-blue-600">{formatKRW(summary.current_balance)}</p>
+          <Card className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900"><CardContent className="pt-6">
+            <p className="text-xs text-blue-600 dark:text-blue-400">현재 잔액</p>
+            <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{formatKRW(summary.current_balance)}</p>
           </CardContent></Card>
-          <Card><CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">총 지급 (+)</p>
-            <p className="text-xl font-bold text-blue-600">{formatKRW(summary.total_credit)}</p>
+          <Card className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900"><CardContent className="pt-6">
+            <p className="text-xs text-green-600 dark:text-green-400">총 지급 (+)</p>
+            <p className="text-xl font-bold text-green-700 dark:text-green-300">{formatKRW(summary.total_credit)}</p>
           </CardContent></Card>
-          <Card><CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">총 회수 (-)</p>
-            <p className="text-xl font-bold text-red-600">{formatKRW(summary.total_debit)}</p>
+          <Card className="bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900"><CardContent className="pt-6">
+            <p className="text-xs text-red-600 dark:text-red-400">총 회수 (-)</p>
+            <p className="text-xl font-bold text-red-700 dark:text-red-300">{formatKRW(summary.total_debit)}</p>
           </CardContent></Card>
         </div>
       )}
@@ -111,9 +113,17 @@ export default function TabMoney({ userId }: Props) {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
           ) : !data?.items.length ? (
-            <div className="p-8 text-center text-muted-foreground">머니 변동 내역이 없습니다</div>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Wallet className="h-10 w-10 mb-3" />
+              <p className="text-base font-medium">머니 변동 내역이 없습니다</p>
+              <p className="text-sm">조건을 변경해주세요.</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

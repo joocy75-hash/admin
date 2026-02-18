@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useUserMessages, sendMessage, markMessageRead, type Message } from '@/hooks/use-user-detail';
-import { Send, Mail, MailOpen } from 'lucide-react';
+import { Send, Mail, MailOpen, Inbox } from 'lucide-react';
 
 type Props = { userId: number };
 
@@ -123,9 +124,16 @@ export default function TabMessages({ userId }: Props) {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
           ) : !data?.items.length ? (
-            <div className="p-8 text-center text-muted-foreground">쪽지 내역이 없습니다</div>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Inbox className="h-10 w-10 mb-3" />
+              <p className="text-base font-medium">쪽지 내역이 없습니다</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

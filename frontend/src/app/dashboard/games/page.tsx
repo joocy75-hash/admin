@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useGameList, useProviderList, deleteGame } from '@/hooks/use-games';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, Gamepad2 } from 'lucide-react';
 
 const CATEGORY_TABS = [
   { key: '', label: '전체' },
@@ -34,7 +37,7 @@ export default function GamesPage() {
 
   const { data: providerData } = useProviderList({ page_size: 100 });
 
-  const { data, loading, refetch } = useGameList({
+  const { data, loading, error, refetch } = useGameList({
     page,
     page_size: 20,
     category: category || undefined,
@@ -126,7 +129,24 @@ export default function GamesPage() {
 
       {/* Table */}
       {loading ? (
-        <p className="text-gray-500">로딩 중...</p>
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-12 text-destructive">
+          <AlertCircle className="h-12 w-12 mb-4" />
+          <p className="text-lg font-medium">데이터를 불러오지 못했습니다</p>
+          <p className="text-sm text-muted-foreground mt-1">{error}</p>
+          <Button variant="outline" className="mt-4" onClick={refetch}>다시 시도</Button>
+        </div>
+      ) : data?.items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <Gamepad2 className="h-12 w-12 mb-4" />
+          <p className="text-lg font-medium">등록된 게임이 없습니다</p>
+          <p className="text-sm">조건을 변경하거나 새로 등록해주세요.</p>
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border dark:border-gray-700">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -187,13 +207,6 @@ export default function GamesPage() {
                   </td>
                 </tr>
               ))}
-              {data?.items.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
-                    등록된 게임이 없습니다
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { useTransactionList, approveTransaction, rejectTransaction } from '@/hooks/use-transactions';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, Receipt } from 'lucide-react';
 
 const TYPE_COLORS: Record<string, string> = {
   deposit: 'bg-blue-100 text-blue-800',
@@ -22,7 +25,7 @@ export default function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [userIdFilter, setUserIdFilter] = useState('');
 
-  const { data, loading, refetch } = useTransactionList({
+  const { data, loading, error, refetch } = useTransactionList({
     page,
     page_size: 20,
     type: typeFilter || undefined,
@@ -106,28 +109,45 @@ export default function TransactionsPage() {
 
       {/* Table */}
       {loading ? (
-        <p className="text-gray-500">Loading...</p>
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-12 text-destructive">
+          <AlertCircle className="h-12 w-12 mb-4" />
+          <p className="text-lg font-medium">데이터를 불러오지 못했습니다</p>
+          <p className="text-sm text-muted-foreground mt-1">{error}</p>
+          <Button variant="outline" className="mt-4" onClick={refetch}>다시 시도</Button>
+        </div>
+      ) : data?.items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+          <Receipt className="h-12 w-12 mb-4" />
+          <p className="text-lg font-medium">거래 내역이 없습니다</p>
+          <p className="text-sm">조건을 변경해주세요.</p>
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500">ID</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500">회원</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500">유형</th>
-                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-gray-500">금액</th>
-                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-gray-500">전 잔액</th>
-                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-gray-500">후 잔액</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500">상태</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500">메모</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500">일시</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500">액션</th>
+                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">ID</th>
+                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">회원</th>
+                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">유형</th>
+                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-400">금액</th>
+                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-400">전 잔액</th>
+                <th className="px-3 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-400">후 잔액</th>
+                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">상태</th>
+                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">메모</th>
+                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">일시</th>
+                <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">액션</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
               {data?.items.map((tx) => (
-                <tr key={tx.id} className="hover:bg-gray-50">
-                  <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-500">{tx.id}</td>
+                <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <td className="whitespace-nowrap px-3 py-3 text-sm text-gray-500 dark:text-gray-400">{tx.id}</td>
                   <td className="whitespace-nowrap px-3 py-3 text-sm font-medium">
                     {tx.user_username || tx.user_id}
                   </td>
@@ -140,10 +160,10 @@ export default function TransactionsPage() {
                   <td className="whitespace-nowrap px-3 py-3 text-sm text-right font-medium">
                     {Number(tx.amount).toLocaleString()}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
+                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500 dark:text-gray-400">
                     {Number(tx.balance_before).toLocaleString()}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
+                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500 dark:text-gray-400">
                     {Number(tx.balance_after).toLocaleString()}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-sm">
@@ -151,10 +171,10 @@ export default function TransactionsPage() {
                       {tx.status}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-xs text-gray-500 max-w-[150px] truncate">
+                  <td className="whitespace-nowrap px-3 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-[150px] truncate">
                     {tx.memo || '-'}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3 text-xs text-gray-500">
+                  <td className="whitespace-nowrap px-3 py-3 text-xs text-gray-500 dark:text-gray-400">
                     {new Date(tx.created_at).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-sm">
@@ -182,13 +202,6 @@ export default function TransactionsPage() {
                   </td>
                 </tr>
               ))}
-              {data?.items.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
-                    거래 내역이 없습니다
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

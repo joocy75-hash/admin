@@ -1,6 +1,7 @@
 """Dashboard statistics endpoints."""
 
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, func, case
@@ -18,6 +19,8 @@ from app.services.cache_service import cache_get, cache_set
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
+KST = ZoneInfo("Asia/Seoul")
+
 
 # ─── Dashboard Stats ──────────────────────────────────────────────
 
@@ -26,12 +29,14 @@ async def get_dashboard_stats(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("dashboard.view")),
 ) -> DashboardStats:
-    # Return cached stats if available (30s TTL)
     cached = await cache_get("dashboard:stats")
     if cached:
         return DashboardStats(**cached)
 
-    today_start = datetime.combine(date.today(), datetime.min.time())
+    # Calculate "today" in KST, then convert to UTC for DB queries
+    kst_now = datetime.now(KST)
+    kst_today_start = datetime.combine(kst_now.date(), datetime.min.time(), tzinfo=KST)
+    today_start = kst_today_start.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
     # Agent count (active, non-super_admin)
     agent_count = (await session.execute(

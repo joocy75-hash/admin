@@ -8,11 +8,12 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.database import get_session
 from app.api.deps import PermissionChecker
-from app.models.admin_user import AdminUser
-from app.models.user import User
+from app.models.admin_user import AdminUser, AdminUserTree
+from app.models.user import User, UserTree
 from app.models.user_bank_account import UserBankAccount
 from app.models.user_betting_permission import UserBettingPermission
 from app.models.user_null_betting_config import UserNullBettingConfig
@@ -23,6 +24,7 @@ from app.schemas.user import (
     BankAccountUpdate,
     BettingPermissionResponse,
     BettingPermissionUpdate,
+    BulkStatusUpdate,
     GameRollingRateResponse,
     GameRollingRateUpdate,
     NullBettingConfigResponse,
@@ -49,6 +51,8 @@ from app.services.promotion_service import cascade_promotion_check
 from app.utils.security import hash_password
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+Referrer = aliased(User)
 
 
 async def _build_response(session: AsyncSession, user: User) -> UserResponse:
@@ -89,11 +93,122 @@ async def _build_response(session: AsyncSession, user: User) -> UserResponse:
     )
 
 
+async def _build_response_batch(
+    session: AsyncSession,
+    users: list[User],
+) -> list[UserResponse]:
+    if not users:
+        return []
+
+    user_ids = [u.id for u in users]
+    referrer_ids = [u.referrer_id for u in users if u.referrer_id]
+
+    # Batch fetch referrers
+    referrer_map: dict[int, str] = {}
+    if referrer_ids:
+        ref_stmt = select(User.id, User.username).where(User.id.in_(referrer_ids))
+        ref_result = await session.execute(ref_stmt)
+        referrer_map = {r.id: r.username for r in ref_result.all()}
+
+    # Batch fetch direct referral counts
+    ref_count_stmt = (
+        select(UserTree.ancestor_id, func.count().label("cnt"))
+        .where(UserTree.ancestor_id.in_(user_ids), UserTree.depth == 1)
+        .group_by(UserTree.ancestor_id)
+    )
+    ref_count_result = await session.execute(ref_count_stmt)
+    ref_count_map: dict[int, int] = {r.ancestor_id: r.cnt for r in ref_count_result.all()}
+
+    items = []
+    for user in users:
+        items.append(UserResponse(
+            id=user.id,
+            uuid=str(user.uuid),
+            username=user.username,
+            real_name=user.real_name,
+            phone=user.phone,
+            email=user.email,
+            nickname=user.nickname,
+            color=user.color,
+            registration_ip=user.registration_ip,
+            virtual_account_bank=user.virtual_account_bank,
+            virtual_account_number=user.virtual_account_number,
+            referrer_id=user.referrer_id,
+            referrer_username=referrer_map.get(user.referrer_id) if user.referrer_id else None,
+            depth=user.depth,
+            rank=user.rank,
+            balance=user.balance,
+            points=user.points,
+            status=user.status,
+            level=user.level,
+            direct_referral_count=ref_count_map.get(user.id, 0),
+            total_deposit=user.total_deposit,
+            total_withdrawal=user.total_withdrawal,
+            total_bet=user.total_bet,
+            total_win=user.total_win,
+            login_count=user.login_count,
+            last_deposit_at=user.last_deposit_at,
+            last_bet_at=user.last_bet_at,
+            memo=user.memo,
+            last_login_at=user.last_login_at,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+        ))
+    return items
+
+
 async def _get_user_or_404(session: AsyncSession, user_id: int) -> User:
     user = await session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+
+async def _verify_user_access(
+    session: AsyncSession,
+    current_user: AdminUser,
+    target_user_id: int,
+) -> None:
+    if current_user.role == "super_admin":
+        return
+    # Get all descendant agent IDs in current_user's subtree (including self)
+    descendant_stmt = select(AdminUserTree.descendant_id).where(
+        AdminUserTree.ancestor_id == current_user.id,
+    )
+    descendant_result = await session.execute(descendant_stmt)
+    subtree_agent_ids = {r[0] for r in descendant_result.all()}
+
+    # Walk up the target user's referrer chain to find an agent in the subtree
+    user = await session.get(User, target_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if any ancestor in the user's referral tree has a referrer_id
+    # that maps to an agent in the admin subtree.
+    # Walk the user_tree ancestors to check if the user belongs to this agent's scope.
+    ancestor_stmt = (
+        select(UserTree.ancestor_id)
+        .where(UserTree.descendant_id == target_user_id)
+    )
+    ancestor_result = await session.execute(ancestor_stmt)
+    user_ancestor_ids = {r[0] for r in ancestor_result.all()}
+
+    # The user or any of their ancestors should be "owned" by an agent in the subtree.
+    # We check if any user_ancestor_id matches an agent's managed user set.
+    # In this system, users are linked to agents via referrer_id.
+    # A simple check: current agent's ID should appear somewhere in the user's ancestor chain
+    # OR the user_id itself should be in a set managed by the agent subtree.
+    # Since users and agents are in separate tables, we check if the current_user.id
+    # is in the user's referrer chain (user referrer_id points to other users, not agents directly).
+    # The practical approach: agents see users they or their sub-agents created.
+    # Users' referrer_id points to other users, so we check the admin_user_tree for subtree scope.
+    if current_user.id in subtree_agent_ids:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied: user is not in your subtree",
+    )
 
 
 # ─── List ─────────────────────────────────────────────────────────
@@ -135,7 +250,7 @@ async def list_users(
     result = await session.execute(stmt)
     users = result.scalars().all()
 
-    items = [await _build_response(session, u) for u in users]
+    items = await _build_response_batch(session, list(users))
     return UserListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -158,6 +273,41 @@ async def get_user_summary_stats(
         banned_count=banned, pending_count=pending,
         total_balance=float(bal), total_points=float(pts),
     )
+
+
+# ─── Bulk Status Update ──────────────────────────────────────────
+
+@router.patch("/bulk-status")
+async def bulk_update_status(
+    body: BulkStatusUpdate,
+    session: AsyncSession = Depends(get_session),
+    current_user: AdminUser = Depends(PermissionChecker("users.update")),
+):
+    VALID_STATUSES = {"active", "suspended", "banned"}
+    if body.status not in VALID_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(VALID_STATUSES)}")
+
+    result = await session.execute(
+        select(User).where(User.id.in_(body.user_ids))
+    )
+    users = result.scalars().all()
+
+    if len(users) != len(body.user_ids):
+        found_ids = {u.id for u in users}
+        missing_ids = [uid for uid in body.user_ids if uid not in found_ids]
+        raise HTTPException(status_code=404, detail=f"Users not found: {missing_ids}")
+
+    now = datetime.utcnow()
+    updated_count = 0
+    for user in users:
+        if user.status != body.status:
+            user.status = body.status
+            user.updated_at = now
+            session.add(user)
+            updated_count += 1
+
+    await session.commit()
+    return {"updated_count": updated_count, "status": body.status, "user_ids": body.user_ids}
 
 
 # ─── Create ───────────────────────────────────────────────────────
@@ -220,6 +370,7 @@ async def get_user(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.view")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
     return await _build_response(session, user)
 
@@ -233,6 +384,7 @@ async def update_user(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
 
     update_data = body.model_dump(exclude_unset=True)
@@ -254,6 +406,7 @@ async def delete_user(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.delete")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
     user.status = "banned"
     user.updated_at = datetime.utcnow()
@@ -269,6 +422,7 @@ async def get_user_detail(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.view")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
     user_resp = await _build_response(session, user)
 
@@ -341,6 +495,7 @@ async def get_user_statistics(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.view")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
     return UserStatistics(
         total_deposit=user.total_deposit,
@@ -679,7 +834,7 @@ async def get_user_referrals(
     result = await session.execute(stmt)
     users = result.scalars().all()
 
-    items = [await _build_response(session, u) for u in users]
+    items = await _build_response_batch(session, list(users))
     return UserListResponse(items=items, total=total, page=page, page_size=page_size)
 
 

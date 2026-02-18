@@ -63,6 +63,7 @@ async def list_audit_logs(
     action: str | None = Query(None),
     module: str | None = Query(None),
     admin_user_id: int | None = Query(None),
+    admin_username: str | None = Query(None, description="Admin username (partial match)"),
     start_date: str | None = Query(None, description="YYYY-MM-DD"),
     end_date: str | None = Query(None, description="YYYY-MM-DD"),
     session: AsyncSession = Depends(get_session),
@@ -76,6 +77,13 @@ async def list_audit_logs(
         base = base.where(AuditLog.module == module)
     if admin_user_id:
         base = base.where(AuditLog.admin_user_id == admin_user_id)
+    if admin_username:
+        admin_ids_subq = (
+            select(AdminUser.id)
+            .where(AdminUser.username.ilike(f"%{admin_username}%"))
+            .scalar_subquery()
+        )
+        base = base.where(AuditLog.admin_user_id.in_(admin_ids_subq))
 
     start, end = _parse_dates(start_date, end_date)
     if start:
@@ -103,6 +111,7 @@ async def export_audit_logs(
     action: str | None = Query(None),
     module: str | None = Query(None),
     admin_user_id: int | None = Query(None),
+    admin_username: str | None = Query(None, description="Admin username (partial match)"),
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
@@ -116,6 +125,13 @@ async def export_audit_logs(
         base = base.where(AuditLog.module == module)
     if admin_user_id:
         base = base.where(AuditLog.admin_user_id == admin_user_id)
+    if admin_username:
+        admin_ids_subq = (
+            select(AdminUser.id)
+            .where(AdminUser.username.ilike(f"%{admin_username}%"))
+            .scalar_subquery()
+        )
+        base = base.where(AuditLog.admin_user_id.in_(admin_ids_subq))
 
     start, end = _parse_dates(start_date, end_date)
     if start:

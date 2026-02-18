@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTransactionList } from '@/hooks/use-transactions';
+import { ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 
 const TYPE_LABELS: Record<string, string> = {
   deposit: '입금', withdrawal: '출금', adjustment: '조정',
@@ -49,9 +51,16 @@ export default function TabTransactions({ userId }: Props) {
         <CardHeader><CardTitle className="text-base">입금 신청 내역</CardTitle></CardHeader>
         <CardContent className="p-0">
           {depositLoading ? (
-            <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
           ) : !depositData?.items.length ? (
-            <div className="p-8 text-center text-muted-foreground">입금 내역이 없습니다</div>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <ArrowDownCircle className="h-10 w-10 mb-3" />
+              <p className="text-base font-medium">입금 내역이 없습니다</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -92,9 +101,16 @@ export default function TabTransactions({ userId }: Props) {
         <CardHeader><CardTitle className="text-base">출금 신청 내역</CardTitle></CardHeader>
         <CardContent className="p-0">
           {withdrawalLoading ? (
-            <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
           ) : !withdrawalData?.items.length ? (
-            <div className="p-8 text-center text-muted-foreground">출금 내역이 없습니다</div>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <ArrowUpCircle className="h-10 w-10 mb-3" />
+              <p className="text-base font-medium">출금 내역이 없습니다</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

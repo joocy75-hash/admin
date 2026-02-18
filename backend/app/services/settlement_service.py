@@ -11,13 +11,34 @@ from app.models.commission import CommissionLedger
 from app.models.settlement import Settlement
 
 
+async def _check_duplicate_settlement(
+    session: AsyncSession,
+    agent_id: int,
+    period_start: datetime,
+    period_end: datetime,
+) -> None:
+    stmt = select(Settlement).where(
+        and_(
+            Settlement.agent_id == agent_id,
+            Settlement.status.in_(["draft", "confirmed"]),
+            Settlement.period_start <= period_end,
+            Settlement.period_end >= period_start,
+        )
+    )
+    existing = (await session.execute(stmt)).scalar_one_or_none()
+    if existing:
+        raise ValueError(
+            f"Overlapping settlement already exists (id={existing.id}, "
+            f"period={existing.period_start.date()}~{existing.period_end.date()})"
+        )
+
+
 async def preview_settlement(
     session: AsyncSession,
     agent_id: int,
     period_start: datetime,
     period_end: datetime,
 ) -> dict:
-    """Preview pending commissions for a settlement period."""
     agent = await session.get(AdminUser, agent_id)
     if not agent:
         raise ValueError("Agent not found")
@@ -66,38 +87,55 @@ async def create_settlement(
     period_end: datetime,
     memo: str | None = None,
 ) -> Settlement:
-    """Create a draft settlement and link pending ledger entries."""
-    preview = await preview_settlement(session, agent_id, period_start, period_end)
+    await _check_duplicate_settlement(session, agent_id, period_start, period_end)
 
-    if preview["pending_entries"] == 0:
+    # Lock pending ledger entries to prevent concurrent settlement creation
+    lock_stmt = (
+        select(CommissionLedger)
+        .where(
+            and_(
+                CommissionLedger.agent_id == agent_id,
+                CommissionLedger.status == "pending",
+                CommissionLedger.settlement_id.is_(None),
+                CommissionLedger.created_at >= period_start,
+                CommissionLedger.created_at <= period_end,
+            )
+        )
+        .with_for_update()
+    )
+    locked_result = await session.execute(lock_stmt)
+    locked_entries = locked_result.scalars().all()
+
+    if not locked_entries:
         raise ValueError("No pending commissions in this period")
+
+    totals: dict[str, Decimal] = {"rolling": Decimal("0"), "losing": Decimal("0"), "deposit": Decimal("0")}
+    for entry in locked_entries:
+        if entry.type in totals:
+            totals[entry.type] += entry.commission_amount
+
+    gross = sum(totals.values())
 
     settlement = Settlement(
         agent_id=agent_id,
         period_start=period_start,
         period_end=period_end,
-        rolling_total=preview["rolling_total"],
-        losing_total=preview["losing_total"],
-        deposit_total=preview["deposit_total"],
-        gross_total=preview["gross_total"],
-        net_total=preview["gross_total"],  # No deductions by default
+        rolling_total=totals["rolling"],
+        losing_total=totals["losing"],
+        deposit_total=totals["deposit"],
+        gross_total=gross,
+        net_total=gross,
         status="draft",
         memo=memo,
     )
     session.add(settlement)
     await session.flush()
 
-    # Link pending ledger entries to this settlement
+    # Link locked entries to this settlement
+    entry_ids = [e.id for e in locked_entries]
     stmt = (
         update(CommissionLedger)
-        .where(
-            and_(
-                CommissionLedger.agent_id == agent_id,
-                CommissionLedger.status == "pending",
-                CommissionLedger.created_at >= period_start,
-                CommissionLedger.created_at <= period_end,
-            )
-        )
+        .where(CommissionLedger.id.in_(entry_ids))
         .values(settlement_id=settlement.id)
     )
     await session.execute(stmt)
@@ -154,15 +192,12 @@ async def pay_settlement(
     session: AsyncSession,
     settlement_id: int,
 ) -> Settlement:
-    """Pay a confirmed settlement. Moves commissions from pending to settled,
-    transfers from pending_balance to balance."""
     settlement = await session.get(Settlement, settlement_id)
     if not settlement:
         raise ValueError("Settlement not found")
     if settlement.status != "confirmed":
         raise ValueError(f"Cannot pay: status is '{settlement.status}'")
 
-    # Update ledger entries
     now = datetime.utcnow()
     stmt = (
         update(CommissionLedger)
@@ -171,8 +206,13 @@ async def pay_settlement(
     )
     await session.execute(stmt)
 
-    # Update agent balance
-    agent = await session.get(AdminUser, settlement.agent_id)
+    # Lock agent row to prevent concurrent balance updates
+    agent_stmt = (
+        select(AdminUser)
+        .where(AdminUser.id == settlement.agent_id)
+        .with_for_update()
+    )
+    agent = (await session.execute(agent_stmt)).scalar_one_or_none()
     if agent:
         agent.balance += settlement.net_total
         agent.pending_balance -= settlement.net_total

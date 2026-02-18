@@ -179,3 +179,8 @@ class UserSummaryStats(BaseModel):
     pending_count: int
     total_balance: float
     total_points: float
+
+
+class BulkStatusUpdate(BaseModel):
+    user_ids: list[int] = Field(min_length=1)
+    status: str = Field(pattern=r"^(active|suspended|banned)$")

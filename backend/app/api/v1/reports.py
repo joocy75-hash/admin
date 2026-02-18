@@ -54,7 +54,6 @@ async def agent_report(
 ) -> AgentReportResponse:
     start, end = _parse_dates(start_date, end_date)
 
-    # All active agents (non-super_admin)
     agents_result = await session.execute(
         select(AdminUser).where(
             AdminUser.status == "active",
@@ -62,43 +61,60 @@ async def agent_report(
         )
     )
     agents = agents_result.scalars().all()
+    agent_ids = [a.id for a in agents]
 
-    items = []
-    for agent in agents:
-        # User count under this agent (via referrer_id not available; use commission ledger user count)
-        user_count = (await session.execute(
-            select(func.count(func.distinct(CommissionLedger.user_id))).where(
-                CommissionLedger.agent_id == agent.id,
-                CommissionLedger.created_at.between(start, end),
-            )
-        )).scalar() or 0
+    # Batch: user count per agent via User.referrer_id
+    user_count_stmt = (
+        select(User.referrer_id, func.count().label("cnt"))
+        .where(User.referrer_id.in_(agent_ids))
+        .group_by(User.referrer_id)
+    )
+    user_count_result = await session.execute(user_count_stmt)
+    user_count_map: dict[int, int] = {r.referrer_id: r.cnt for r in user_count_result.all()}
 
-        # Total bets via commission ledger source_amount (rolling type)
-        total_bets = (await session.execute(
-            select(func.coalesce(func.sum(CommissionLedger.source_amount), 0)).where(
-                CommissionLedger.agent_id == agent.id,
-                CommissionLedger.type == "rolling",
-                CommissionLedger.created_at.between(start, end),
-            )
-        )).scalar() or 0
+    # Batch: total bets per agent (rolling type)
+    bets_stmt = (
+        select(
+            CommissionLedger.agent_id,
+            func.coalesce(func.sum(CommissionLedger.source_amount), 0).label("total_bets"),
+        )
+        .where(
+            CommissionLedger.agent_id.in_(agent_ids),
+            CommissionLedger.type == "rolling",
+            CommissionLedger.created_at.between(start, end),
+        )
+        .group_by(CommissionLedger.agent_id)
+    )
+    bets_result = await session.execute(bets_stmt)
+    bets_map: dict[int, Decimal] = {r.agent_id: Decimal(str(r.total_bets)) for r in bets_result.all()}
 
-        # Total commissions
-        total_commissions = (await session.execute(
-            select(func.coalesce(func.sum(CommissionLedger.commission_amount), 0)).where(
-                CommissionLedger.agent_id == agent.id,
-                CommissionLedger.created_at.between(start, end),
-            )
-        )).scalar() or 0
+    # Batch: total commissions per agent
+    comm_stmt = (
+        select(
+            CommissionLedger.agent_id,
+            func.coalesce(func.sum(CommissionLedger.commission_amount), 0).label("total_comm"),
+        )
+        .where(
+            CommissionLedger.agent_id.in_(agent_ids),
+            CommissionLedger.created_at.between(start, end),
+        )
+        .group_by(CommissionLedger.agent_id)
+    )
+    comm_result = await session.execute(comm_stmt)
+    comm_map: dict[int, Decimal] = {r.agent_id: Decimal(str(r.total_comm)) for r in comm_result.all()}
 
-        items.append(AgentReportItem(
+    items = [
+        AgentReportItem(
             agent_id=agent.id,
             username=agent.username,
             agent_code=agent.agent_code,
             role=agent.role,
-            total_users=user_count,
-            total_bets=Decimal(str(total_bets)),
-            total_commissions=Decimal(str(total_commissions)),
-        ))
+            total_users=user_count_map.get(agent.id, 0),
+            total_bets=bets_map.get(agent.id, Decimal("0")),
+            total_commissions=comm_map.get(agent.id, Decimal("0")),
+        )
+        for agent in agents
+    ]
 
     return AgentReportResponse(
         items=items,

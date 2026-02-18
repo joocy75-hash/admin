@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 from decimal import Decimal
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import Transaction
@@ -64,7 +65,9 @@ async def approve_transaction(session: AsyncSession, tx_id: int, admin_id: int) 
     if tx.status != "pending":
         raise ValueError(f"Cannot approve: status is {tx.status}")
 
-    user = await session.get(User, tx.user_id)
+    # Lock user row to prevent concurrent balance modifications
+    user_stmt = select(User).where(User.id == tx.user_id).with_for_update()
+    user = (await session.execute(user_stmt)).scalar_one_or_none()
     if not user:
         raise ValueError("User not found")
 
@@ -117,7 +120,9 @@ async def create_adjustment(
     admin_id: int,
     memo: str | None = None,
 ) -> Transaction:
-    user = await session.get(User, user_id)
+    # Lock user row to prevent concurrent balance modifications
+    user_stmt = select(User).where(User.id == user_id).with_for_update()
+    user = (await session.execute(user_stmt)).scalar_one_or_none()
     if not user:
         raise ValueError("User not found")
 

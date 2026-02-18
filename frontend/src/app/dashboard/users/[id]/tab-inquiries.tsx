@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useUserInquiries, replyToInquiry, type Inquiry } from '@/hooks/use-user-detail';
+import { MessageSquare } from 'lucide-react';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: '미답변', answered: '답변완료', closed: '종료',
@@ -77,17 +79,17 @@ export default function TabInquiries({ userId }: Props) {
       {/* Summary */}
       {summary && (
         <div className="grid grid-cols-3 gap-4">
-          <Card><CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">전체 건수</p>
-            <p className="text-xl font-bold">{summary.total_count}</p>
+          <Card className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900"><CardContent className="pt-6">
+            <p className="text-xs text-blue-600 dark:text-blue-400">전체 건수</p>
+            <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{summary.total_count}</p>
           </CardContent></Card>
-          <Card><CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">미답변</p>
-            <p className="text-xl font-bold text-red-600">{summary.pending_count}</p>
+          <Card className="bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900"><CardContent className="pt-6">
+            <p className="text-xs text-red-600 dark:text-red-400">미답변</p>
+            <p className="text-xl font-bold text-red-700 dark:text-red-300">{summary.pending_count}</p>
           </CardContent></Card>
-          <Card><CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground">답변완료</p>
-            <p className="text-xl font-bold text-blue-600">{summary.answered_count}</p>
+          <Card className="bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900"><CardContent className="pt-6">
+            <p className="text-xs text-green-600 dark:text-green-400">답변완료</p>
+            <p className="text-xl font-bold text-green-700 dark:text-green-300">{summary.answered_count}</p>
           </CardContent></Card>
         </div>
       )}
@@ -159,9 +161,17 @@ export default function TabInquiries({ userId }: Props) {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-8 text-center text-muted-foreground">로딩 중...</div>
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
           ) : !data?.items.length ? (
-            <div className="p-8 text-center text-muted-foreground">문의 내역이 없습니다</div>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <MessageSquare className="h-10 w-10 mb-3" />
+              <p className="text-base font-medium">문의 내역이 없습니다</p>
+              <p className="text-sm">조건을 변경해주세요.</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
