@@ -25,6 +25,19 @@ from app.api.v1.connector import router as connector_router
 from app.api.v1.user_history import router as user_history_router
 from app.api.v1.user_inquiry import router as user_inquiry_router
 from app.api.v1.user_message import router as user_message_router
+from app.api.v1.limits import router as limits_router
+from app.api.v1.salary import router as salary_router
+from app.api.v1.vip import router as vip_router
+from app.api.v1.promotions import router as promotions_router
+from app.api.v1.notifications import router as notifications_router
+from app.api.v1.fraud import router as fraud_router
+from app.api.v1.monitoring import router as monitoring_router
+from app.api.v1.ip_management import router as ip_management_router
+from app.api.v1.memos import router as memos_router
+from app.api.v1.analytics import router as analytics_router
+from app.api.v1.kyc import router as kyc_router
+from app.api.v1.bi import router as bi_router
+from app.api.v1.backup import router as backup_router
 from app.middleware.audit import AuditLogMiddleware
 from app.middleware.security import SecurityHeadersMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -44,8 +57,9 @@ app = FastAPI(
     title=settings.APP_NAME,
     version="0.1.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if settings.ENV != "production" else None,
+    redoc_url="/redoc" if settings.ENV != "production" else None,
+    openapi_url="/openapi.json" if settings.ENV != "production" else None,
 )
 
 app.add_middleware(SecurityHeadersMiddleware)
@@ -81,6 +95,19 @@ app.include_router(connector_router, prefix="/api/v1")
 app.include_router(user_history_router, prefix="/api/v1")
 app.include_router(user_inquiry_router, prefix="/api/v1")
 app.include_router(user_message_router, prefix="/api/v1")
+app.include_router(limits_router, prefix="/api/v1")
+app.include_router(salary_router, prefix="/api/v1")
+app.include_router(vip_router, prefix="/api/v1")
+app.include_router(promotions_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(fraud_router, prefix="/api/v1")
+app.include_router(monitoring_router, prefix="/api/v1")
+app.include_router(ip_management_router, prefix="/api/v1")
+app.include_router(memos_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")
+app.include_router(kyc_router, prefix="/api/v1")
+app.include_router(bi_router, prefix="/api/v1")
+app.include_router(backup_router, prefix="/api/v1")
 
 
 @app.get("/health")
@@ -92,8 +119,8 @@ async def health_check():
         async with async_session() as session:
             await session.execute(select(1))
         checks["db"] = "ok"
-    except Exception as e:
-        checks["db"] = f"error: {str(e)}"
+    except Exception:
+        checks["db"] = "error"
 
     # Redis check
     try:
@@ -102,8 +129,8 @@ async def health_check():
         await r.ping()
         await r.aclose()
         checks["redis"] = "ok"
-    except Exception as e:
-        checks["redis"] = f"error: {str(e)}"
+    except Exception:
+        checks["redis"] = "error"
 
     all_ok = all(v == "ok" for v in checks.values())
     return {

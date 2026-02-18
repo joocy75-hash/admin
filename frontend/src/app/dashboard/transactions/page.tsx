@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useTransactionList, approveTransaction, rejectTransaction } from '@/hooks/use-transactions';
+import type { Transaction } from '@/hooks/use-transactions';
+import { getTxExplorerUrl, getAddressExplorerUrl, getExplorerName, shortenHash } from '@/lib/blockchain';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,26 +16,218 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from '@/components/ui/alert-dialog';
-import { AlertCircle, Receipt } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { AlertCircle, Receipt, ExternalLink, Copy, Check } from 'lucide-react';
 
+const TYPE_LABELS: Record<string, string> = {
+  deposit: '입금', withdrawal: '출금', adjustment: '조정', commission: '커미션',
+};
 const TYPE_COLORS: Record<string, string> = {
   deposit: 'bg-blue-100 text-blue-800',
   withdrawal: 'bg-red-100 text-red-800',
   adjustment: 'bg-purple-100 text-purple-800',
   commission: 'bg-green-100 text-green-800',
 };
-
+const STATUS_LABELS: Record<string, string> = {
+  pending: '대기', approved: '승인', rejected: '거부',
+};
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   approved: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
 };
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={handleCopy}>
+      {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+    </Button>
+  );
+}
+
+function TxHashLink({ txHash, network }: { txHash: string; network?: string | null }) {
+  const url = getTxExplorerUrl(txHash, network);
+  const name = getExplorerName(network);
+  return (
+    <div className="flex items-center gap-1">
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-mono text-blue-600 hover:text-blue-800 hover:underline"
+          title={`${name}에서 확인`}
+        >
+          {shortenHash(txHash)}
+        </a>
+      ) : (
+        <code className="text-xs font-mono text-muted-foreground">{shortenHash(txHash)}</code>
+      )}
+      <CopyButton text={txHash} />
+      {url && (
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-blue-600">
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+function TxDetailDialog({ tx, open, onClose }: { tx: Transaction | null; open: boolean; onClose: () => void }) {
+  if (!tx) return null;
+  const txUrl = getTxExplorerUrl(tx.tx_hash || '', tx.network);
+  const addrUrl = getAddressExplorerUrl(tx.wallet_address || '', tx.network);
+  const explorerName = getExplorerName(tx.network);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            거래 상세 #{tx.id}
+            <Badge className={TYPE_COLORS[tx.type] || ''} variant="secondary">
+              {TYPE_LABELS[tx.type] || tx.type}
+            </Badge>
+            <Badge className={STATUS_COLORS[tx.status] || ''} variant="secondary">
+              {STATUS_LABELS[tx.status] || tx.status}
+            </Badge>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">회원</p>
+              <p className="font-medium">{tx.user_username || `ID: ${tx.user_id}`}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">금액</p>
+              <p className="font-mono font-bold text-lg">{Number(tx.amount).toLocaleString()} <span className="text-xs font-normal">{tx.coin_type || 'USDT'}</span></p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">전 잔액</p>
+              <p className="font-mono">{Number(tx.balance_before).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">후 잔액</p>
+              <p className="font-mono">{Number(tx.balance_after).toLocaleString()}</p>
+            </div>
+          </div>
+
+          {(tx.coin_type || tx.network) && (
+            <div className="rounded-md border p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">블록체인 정보</p>
+              <div className="grid grid-cols-2 gap-2">
+                {tx.coin_type && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">코인</p>
+                    <Badge variant="outline">{tx.coin_type}</Badge>
+                  </div>
+                )}
+                {tx.network && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">네트워크</p>
+                    <Badge variant="secondary">{tx.network}</Badge>
+                  </div>
+                )}
+              </div>
+
+              {tx.tx_hash && (
+                <div>
+                  <p className="text-xs text-muted-foreground">TX Hash</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <code className="text-xs font-mono break-all flex-1">{tx.tx_hash}</code>
+                    <CopyButton text={tx.tx_hash} />
+                  </div>
+                  {txUrl && (
+                    <a
+                      href={txUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      {explorerName}에서 확인
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {tx.wallet_address && (
+                <div>
+                  <p className="text-xs text-muted-foreground">지갑 주소</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <code className="text-xs font-mono break-all flex-1">{tx.wallet_address}</code>
+                    <CopyButton text={tx.wallet_address} />
+                  </div>
+                  {addrUrl && (
+                    <a
+                      href={addrUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      {explorerName}에서 확인
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {tx.confirmations != null && (
+                <div>
+                  <p className="text-xs text-muted-foreground">블록 확인</p>
+                  <p className="font-mono">{tx.confirmations} confirmations</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tx.memo && (
+            <div>
+              <p className="text-xs text-muted-foreground">메모</p>
+              <p>{tx.memo}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground border-t pt-3">
+            <div>
+              <p>신청일</p>
+              <p className="text-foreground">{new Date(tx.created_at).toLocaleString('ko-KR')}</p>
+            </div>
+            <div>
+              <p>처리일</p>
+              <p className="text-foreground">{tx.processed_at ? new Date(tx.processed_at).toLocaleString('ko-KR') : '-'}</p>
+            </div>
+            <div>
+              <p>처리자</p>
+              <p className="text-foreground">{tx.processed_by_username || '-'}</p>
+            </div>
+            <div>
+              <p>UUID</p>
+              <p className="text-foreground font-mono">{shortenHash(tx.uuid)}</p>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function TransactionsPage() {
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [userIdFilter, setUserIdFilter] = useState('');
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState('');
@@ -55,7 +249,8 @@ export default function TransactionsPage() {
     user_id: userIdFilter ? Number(userIdFilter) : undefined,
   });
 
-  const handleApprove = (id: number) => {
+  const handleApprove = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
     openConfirm('거래 승인', '이 거래를 승인하시겠습니까?', async () => {
       try {
         await approveTransaction(id);
@@ -66,7 +261,8 @@ export default function TransactionsPage() {
     });
   };
 
-  const handleReject = (id: number) => {
+  const handleReject = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
     openConfirm('거래 거부', '이 거래를 거부하시겠습니까?', async () => {
       try {
         await rejectTransaction(id);
@@ -93,6 +289,8 @@ export default function TransactionsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <TxDetailDialog tx={selectedTx} open={!!selectedTx} onClose={() => setSelectedTx(null)} />
 
       <h1 className="text-2xl font-bold">입출금 관리</h1>
 
@@ -192,16 +390,15 @@ export default function TransactionsPage() {
             </TableHeader>
             <TableBody>
               {data?.items.map((tx) => (
-                <TableRow key={tx.id}>
+                <TableRow key={tx.id} className="cursor-pointer" onClick={() => setSelectedTx(tx)}>
                   <TableCell className="text-muted-foreground">{tx.id}</TableCell>
                   <TableCell className="font-medium">
                     {tx.user_username || tx.user_id}
                   </TableCell>
                   <TableCell>
                     <Badge className={TYPE_COLORS[tx.type] || 'bg-gray-100 text-gray-800'} variant="secondary">
-                      {tx.type}
+                      {TYPE_LABELS[tx.type] || tx.type}
                     </Badge>
-                    <span className="ml-1 text-xs text-muted-foreground">({tx.action})</span>
                   </TableCell>
                   <TableCell className="text-center">
                     {tx.coin_type ? (
@@ -219,22 +416,26 @@ export default function TransactionsPage() {
                   </TableCell>
                   <TableCell>
                     <Badge className={STATUS_COLORS[tx.status] || 'bg-gray-100 text-gray-800'} variant="secondary">
-                      {tx.status}
+                      {STATUS_LABELS[tx.status] || tx.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate font-mono">
-                    {tx.tx_hash ? tx.tx_hash.slice(0, 10) + '...' : (tx.memo || '-')}
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {tx.tx_hash ? (
+                      <TxHashLink txHash={tx.tx_hash} network={tx.network} />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">{tx.memo ? shortenHash(tx.memo, 10, 0) : '-'}</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {new Date(tx.created_at).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })}
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     {tx.status === 'pending' ? (
                       <div className="flex gap-1">
-                        <Button size="xs" onClick={() => handleApprove(tx.id)}>
+                        <Button size="sm" className="h-6 text-xs px-2" onClick={(e) => handleApprove(e, tx.id)}>
                           승인
                         </Button>
-                        <Button variant="destructive" size="xs" onClick={() => handleReject(tx.id)}>
+                        <Button variant="destructive" size="sm" className="h-6 text-xs px-2" onClick={(e) => handleReject(e, tx.id)}>
                           거부
                         </Button>
                       </div>

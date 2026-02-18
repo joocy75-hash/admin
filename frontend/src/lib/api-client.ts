@@ -115,6 +115,8 @@ export const apiClient = {
     fetchApi<T>(endpoint, { method: 'POST', body, headers }),
   put: <T>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
     fetchApi<T>(endpoint, { method: 'PUT', body, headers }),
+  patch: <T>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
+    fetchApi<T>(endpoint, { method: 'PATCH', body, headers }),
   delete: <T>(endpoint: string, headers?: Record<string, string>) =>
     fetchApi<T>(endpoint, { method: 'DELETE', headers }),
 };

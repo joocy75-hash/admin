@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTransactionList } from '@/hooks/use-transactions';
-import { ArrowDownCircle, ArrowUpCircle, Copy } from 'lucide-react';
+import { getTxExplorerUrl, getAddressExplorerUrl, getExplorerName, shortenHash } from '@/lib/blockchain';
+import { ArrowDownCircle, ArrowUpCircle, Copy, Check, ExternalLink } from 'lucide-react';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: '대기', approved: '승인', rejected: '거부', completed: '완료',
@@ -20,9 +21,45 @@ const STATUS_COLORS: Record<string, string> = {
 
 function formatAmount(n: number) { return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 }); }
 
-function shortenHash(hash: string) {
-  if (hash.length <= 16) return hash;
-  return hash.slice(0, 8) + '...' + hash.slice(-6);
+function CopyBtn({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={handleCopy}>
+      {copied ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+    </Button>
+  );
+}
+
+function HashWithLink({ hash, network, type }: { hash: string; network?: string | null; type: 'tx' | 'address' }) {
+  const url = type === 'tx' ? getTxExplorerUrl(hash, network) : getAddressExplorerUrl(hash, network);
+  return (
+    <div className="flex items-center gap-1">
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-mono text-blue-600 hover:text-blue-800 hover:underline"
+          title={`${getExplorerName(network)}에서 확인`}
+        >
+          {shortenHash(hash)}
+        </a>
+      ) : (
+        <code className="text-xs font-mono text-muted-foreground">{shortenHash(hash)}</code>
+      )}
+      <CopyBtn text={hash} />
+      {url && (
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-blue-600">
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+    </div>
+  );
 }
 
 type Props = { userId: number };
@@ -43,10 +80,6 @@ export default function TabTransactions({ userId }: Props) {
     page: 1,
     page_size: 10,
   });
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-  };
 
   return (
     <div className="space-y-6">
@@ -91,12 +124,7 @@ export default function TabTransactions({ userId }: Props) {
                       </td>
                       <td className="px-4 py-2">
                         {tx.tx_hash ? (
-                          <div className="flex items-center gap-1">
-                            <code className="text-xs font-mono text-muted-foreground">{shortenHash(tx.tx_hash)}</code>
-                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => copyToClipboard(tx.tx_hash!)}>
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          <HashWithLink hash={tx.tx_hash} network={tx.network} type="tx" />
                         ) : '-'}
                       </td>
                       <td className="px-4 py-2 text-center">
@@ -157,22 +185,12 @@ export default function TabTransactions({ userId }: Props) {
                       </td>
                       <td className="px-4 py-2">
                         {tx.wallet_address ? (
-                          <div className="flex items-center gap-1">
-                            <code className="text-xs font-mono text-muted-foreground">{shortenHash(tx.wallet_address)}</code>
-                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => copyToClipboard(tx.wallet_address!)}>
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          <HashWithLink hash={tx.wallet_address} network={tx.network} type="address" />
                         ) : '-'}
                       </td>
                       <td className="px-4 py-2">
                         {tx.tx_hash ? (
-                          <div className="flex items-center gap-1">
-                            <code className="text-xs font-mono text-muted-foreground">{shortenHash(tx.tx_hash)}</code>
-                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => copyToClipboard(tx.tx_hash!)}>
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
+                          <HashWithLink hash={tx.tx_hash} network={tx.network} type="tx" />
                         ) : '-'}
                       </td>
                       <td className="px-4 py-2 text-center">

@@ -26,6 +26,10 @@ from app.models.user_betting_permission import UserBettingPermission
 from app.models.user_game_rolling_rate import UserGameRollingRate
 from app.models.user_login_history import UserLoginHistory
 from app.models.user_null_betting_config import UserNullBettingConfig
+from app.models.vip_level import VipLevel
+from app.models.transaction_limit import TransactionLimit
+from app.models.betting_limit import BettingLimit
+from app.models.promotion import Promotion
 
 
 def hash_password(password: str) -> str:
@@ -54,6 +58,10 @@ PERMISSION_MODULES = {
     "setting": ["view", "update"],
     "announcement": ["view", "create", "update", "delete"],
     "role": ["view", "create", "update", "delete", "assign"],
+    "fraud": ["view", "update"],
+    "monitoring": ["view"],
+    "notification": ["view"],
+    "partner": ["view"],
 }
 
 GAME_CATEGORIES = ["casino", "slot", "holdem", "sports", "shooting", "coin", "minigame"]
@@ -279,10 +287,49 @@ def seed():
         session.add(Message(sender_type="admin", sender_id=admin.id, receiver_type="user", receiver_id=user1.id, title="Welcome bonus", content="Welcome! Your 10,000 point bonus has been applied.", is_read=True, read_at=now - timedelta(days=5)))
         session.add(Message(sender_type="user", sender_id=user1.id, receiver_type="admin", receiver_id=admin.id, title="Thank you", content="Thanks for the bonus!", is_read=True, read_at=now - timedelta(days=4)))
 
+        # 19. VIP Levels
+        vip_levels = [
+            VipLevel(level=1, name="Bronze", min_total_deposit=Decimal("0"), min_total_bet=Decimal("0"), rolling_bonus_rate=Decimal("0.10"), losing_bonus_rate=Decimal("1.00"), deposit_limit_daily=Decimal("5000"), withdrawal_limit_daily=Decimal("3000"), withdrawal_limit_monthly=Decimal("50000"), max_single_bet=Decimal("500"), color="#CD7F32", icon="bronze", sort_order=1, is_active=True, created_at=now, updated_at=now),
+            VipLevel(level=2, name="Silver", min_total_deposit=Decimal("1000"), min_total_bet=Decimal("5000"), rolling_bonus_rate=Decimal("0.20"), losing_bonus_rate=Decimal("2.00"), deposit_limit_daily=Decimal("10000"), withdrawal_limit_daily=Decimal("5000"), withdrawal_limit_monthly=Decimal("100000"), max_single_bet=Decimal("1000"), color="#C0C0C0", icon="silver", sort_order=2, is_active=True, created_at=now, updated_at=now),
+            VipLevel(level=3, name="Gold", min_total_deposit=Decimal("5000"), min_total_bet=Decimal("25000"), rolling_bonus_rate=Decimal("0.30"), losing_bonus_rate=Decimal("3.00"), deposit_limit_daily=Decimal("50000"), withdrawal_limit_daily=Decimal("20000"), withdrawal_limit_monthly=Decimal("500000"), max_single_bet=Decimal("5000"), color="#FFD700", icon="gold", sort_order=3, is_active=True, created_at=now, updated_at=now),
+            VipLevel(level=4, name="Platinum", min_total_deposit=Decimal("20000"), min_total_bet=Decimal("100000"), rolling_bonus_rate=Decimal("0.50"), losing_bonus_rate=Decimal("5.00"), deposit_limit_daily=Decimal("200000"), withdrawal_limit_daily=Decimal("100000"), withdrawal_limit_monthly=Decimal("2000000"), max_single_bet=Decimal("20000"), color="#E5E4E2", icon="platinum", sort_order=4, is_active=True, created_at=now, updated_at=now),
+            VipLevel(level=5, name="Diamond", min_total_deposit=Decimal("100000"), min_total_bet=Decimal("500000"), rolling_bonus_rate=Decimal("1.00"), losing_bonus_rate=Decimal("10.00"), deposit_limit_daily=Decimal("1000000"), withdrawal_limit_daily=Decimal("500000"), withdrawal_limit_monthly=Decimal("10000000"), max_single_bet=Decimal("100000"), color="#B9F2FF", icon="diamond", sort_order=5, is_active=True, created_at=now, updated_at=now),
+        ]
+        for vl in vip_levels:
+            session.add(vl)
+        print(f"  VIP Levels: {len(vip_levels)} created")
+
+        # 20. Default Transaction Limits (global)
+        tx_limits = [
+            TransactionLimit(scope_type="global", scope_id=0, tx_type="deposit", min_amount=Decimal("10"), max_amount=Decimal("100000"), daily_limit=Decimal("500000"), daily_count=10, monthly_limit=Decimal("5000000"), is_active=True, updated_at=now),
+            TransactionLimit(scope_type="global", scope_id=0, tx_type="withdrawal", min_amount=Decimal("50"), max_amount=Decimal("50000"), daily_limit=Decimal("200000"), daily_count=5, monthly_limit=Decimal("2000000"), is_active=True, updated_at=now),
+        ]
+        for tl in tx_limits:
+            session.add(tl)
+        print(f"  Transaction Limits: {len(tx_limits)} created")
+
+        # 21. Default Betting Limits (global)
+        for cat in GAME_CATEGORIES:
+            session.add(BettingLimit(scope_type="global", scope_id=0, game_category=cat, min_bet=Decimal("1"), max_bet=Decimal("10000"), max_daily_loss=Decimal("100000"), is_active=True, updated_at=now))
+        print(f"  Betting Limits: {len(GAME_CATEGORIES)} created (global)")
+
+        # 22. Sample Promotions
+        promos = [
+            Promotion(name="신규 가입 보너스", type="first_deposit", description="첫 입금 시 100% 보너스 지급", bonus_type="percent", bonus_value=Decimal("100"), min_deposit=Decimal("100"), max_bonus=Decimal("500"), wagering_multiplier=5, target="new_users", max_claims_per_user=1, is_active=True, priority=10, starts_at=now - timedelta(days=30), ends_at=now + timedelta(days=365), created_by=admin.id, created_at=now, updated_at=now),
+            Promotion(name="재충전 보너스 20%", type="reload", description="재입금 시 20% 보너스", bonus_type="percent", bonus_value=Decimal("20"), min_deposit=Decimal("50"), max_bonus=Decimal("200"), wagering_multiplier=3, target="all", max_claims_per_user=0, is_active=True, priority=5, starts_at=now - timedelta(days=7), ends_at=now + timedelta(days=90), created_by=admin.id, created_at=now, updated_at=now),
+            Promotion(name="주말 캐시백 10%", type="cashback", description="주말 순손실의 10% 캐시백", bonus_type="percent", bonus_value=Decimal("10"), max_bonus=Decimal("1000"), wagering_multiplier=1, target="all", max_claims_per_user=0, is_active=True, priority=3, starts_at=now - timedelta(days=14), created_by=admin.id, created_at=now, updated_at=now),
+            Promotion(name="출석 체크 이벤트", type="attendance", description="매일 출석 시 포인트 지급", bonus_type="fixed", bonus_value=Decimal("10"), wagering_multiplier=1, target="all", max_claims_per_user=0, is_active=True, priority=1, created_by=admin.id, created_at=now, updated_at=now),
+        ]
+        for p in promos:
+            session.add(p)
+        print(f"  Promotions: {len(promos)} created")
+
         session.commit()
         print("\nSeed completed successfully!")
-        print("  Login: superadmin / admin1234!")
+        print("  Login: superadmin / [see .env or deployment docs]")
         print("  Sample users: testuser1, testuser2")
+        print("  VIP Levels: Bronze → Diamond (5 tiers)")
+        print("  Promotions: 4 active")
 
 
 if __name__ == "__main__":

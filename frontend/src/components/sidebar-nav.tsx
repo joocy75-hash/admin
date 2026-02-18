@@ -11,16 +11,30 @@ import {
   Wallet,
   Gamepad2,
   BarChart3,
+  BarChart2,
   ScrollText,
   Settings,
   Megaphone,
   Shield,
   Handshake,
   LogOut,
+  ShieldCheck,
+  Gift,
+  Crown,
+  Banknote,
+  Bell,
+  ShieldAlert,
+  Activity,
+  Globe,
+  UsersRound,
+  FileCheck,
+  PieChart,
+  Database,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { apiClient } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const navItems = [
   { label: '대시보드', href: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
@@ -30,10 +44,23 @@ const navItems = [
   { label: '정산', href: '/dashboard/settlements', icon: Calculator, permission: 'settlement.view' },
   { label: '입출금', href: '/dashboard/transactions', icon: Wallet, permission: 'transaction.view' },
   { label: '게임 관리', href: '/dashboard/games', icon: Gamepad2, permission: 'game.view' },
+  { label: 'VIP 등급', href: '/dashboard/vip', icon: Crown, permission: 'users.view' },
+  { label: '한도 관리', href: '/dashboard/limits', icon: ShieldCheck, permission: 'setting.view' },
+  { label: '프로모션', href: '/dashboard/promotions', icon: Gift, permission: 'announcement.view' },
+  { label: '급여 관리', href: '/dashboard/salary', icon: Banknote, permission: 'agents.view' },
   { label: '파트너', href: '/dashboard/partner', icon: Handshake, permission: 'partner.view' },
   { label: '리포트', href: '/dashboard/reports', icon: BarChart3, permission: 'report.view' },
   { label: '감사 로그', href: '/dashboard/audit', icon: ScrollText, permission: 'audit_log.view' },
   { label: '공지 관리', href: '/dashboard/announcements', icon: Megaphone, permission: 'announcement.view' },
+  { label: '알림', href: '/dashboard/notifications', icon: Bell, permission: 'notification.view' },
+  { label: 'FDS', href: '/dashboard/fraud', icon: ShieldAlert, permission: 'fraud.view' },
+  { label: '실시간 모니터링', href: '/dashboard/monitoring', icon: Activity, permission: 'monitoring.view' },
+  { label: 'IP 관리', href: '/dashboard/ip-management', icon: Globe, permission: 'setting.view' },
+  { label: '분석/RTP', href: '/dashboard/analytics', icon: BarChart2, permission: 'report.view' },
+  { label: '대량 작업', href: '/dashboard/bulk', icon: UsersRound, permission: 'users.update' },
+  { label: 'KYC 인증', href: '/dashboard/kyc', icon: FileCheck, permission: 'users.view' },
+  { label: 'BI 대시보드', href: '/dashboard/bi', icon: PieChart, permission: 'report.view' },
+  { label: '백업 관리', href: '/dashboard/backup', icon: Database, permission: 'setting.view' },
   { label: '역할/권한', href: '/dashboard/roles', icon: Shield, permission: 'role.view' },
   { label: '시스템 설정', href: '/dashboard/settings', icon: Settings, permission: 'setting.view' },
 ];
@@ -87,6 +114,7 @@ export function SidebarNav() {
             <p className="text-sm font-medium truncate">{user?.username}</p>
             <p className="text-xs text-muted-foreground truncate">{user?.role}</p>
           </div>
+          <ThemeToggle />
           <button
             onClick={handleLogout}
             className="text-gray-400 hover:text-red-500 transition-colors"

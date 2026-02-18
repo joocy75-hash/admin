@@ -29,3 +29,13 @@ from app.models.user_betting_permission import UserBettingPermission  # noqa: F4
 from app.models.user_game_rolling_rate import UserGameRollingRate  # noqa: F401
 from app.models.user_login_history import UserLoginHistory  # noqa: F401
 from app.models.user_null_betting_config import UserNullBettingConfig  # noqa: F401
+from app.models.vip_level import VipLevel, UserLevelHistory  # noqa: F401
+from app.models.transaction_limit import TransactionLimit  # noqa: F401
+from app.models.betting_limit import BettingLimit  # noqa: F401
+from app.models.promotion import Coupon, Promotion, UserCoupon, UserPromotion  # noqa: F401
+from app.models.agent_salary_payment import AgentSalaryPayment  # noqa: F401
+from app.models.notification import AdminNotification  # noqa: F401
+from app.models.fraud_alert import FraudAlert, FraudRule  # noqa: F401
+from app.models.ip_restriction import IpRestriction  # noqa: F401
+from app.models.admin_memo import AdminMemo  # noqa: F401
+from app.models.kyc_document import KycDocument  # noqa: F401
