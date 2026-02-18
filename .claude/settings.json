@@ -1,0 +1,65 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx next build:*)",
+      "Bash(npx next dev:*)",
+      "Bash(npx shadcn@latest:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3:*)",
+      "Bash(pip show:*)",
+      "Bash(python3 -m venv:*)",
+      "Bash(PYTHONPATH=. alembic:*)",
+      "Bash(PYTHONPATH=. uvicorn:*)",
+      "Bash(PYTHONPATH=. python:*)",
+      "Bash(python scripts/*:*)",
+      "Bash(python -c:*)",
+      "Bash(python3:*)",
+      "Bash(docker compose up:*)",
+      "Bash(docker ps:*)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(source:*)",
+      "Bash(chmod:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-dangerous.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/lint-on-edit.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/notify-done.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

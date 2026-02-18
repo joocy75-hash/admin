@@ -1,0 +1,334 @@
+/* ============================================
+   Member Tree View - Admin Panel USS
+   Dark theme with gold accent
+   ============================================ */
+
+/* --- Root --- */
+.root {
+    flex-grow: 1;
+    background-color: #1a1a1a;
+    padding: 0;
+}
+
+/* --- Header --- */
+.header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 32px 16px 32px;
+    background-color: #111111;
+    border-bottom-width: 1px;
+    border-bottom-color: #333333;
+}
+
+.title-block {
+    flex-direction: column;
+}
+
+.page-title {
+    font-size: 22px;
+    color: #FFFFFF;
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+}
+
+.page-subtitle {
+    font-size: 12px;
+    color: #777777;
+    letter-spacing: 1px;
+}
+
+.header-actions {
+    flex-direction: row;
+    align-items: center;
+}
+
+.header-actions > * {
+    margin-left: 8px;
+}
+
+/* --- Buttons --- */
+.btn-primary {
+    background-color: #C9A962;
+    color: #0A0A0A;
+    border-width: 0;
+    border-radius: 0;
+    padding: 8px 20px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+}
+
+.btn-primary:hover {
+    background-color: #D4B872;
+}
+
+.btn-secondary {
+    background-color: transparent;
+    color: #FFFFFF;
+    border-width: 1px;
+    border-color: #333333;
+    border-radius: 0;
+    padding: 8px 20px;
+    font-size: 11px;
+    letter-spacing: 1px;
+}
+
+.btn-secondary:hover {
+    border-color: #C9A962;
+    color: #C9A962;
+}
+
+/* --- Filter Bar --- */
+.filter-bar {
+    flex-direction: row;
+    align-items: center;
+    padding: 12px 32px;
+    background-color: #111111;
+    border-bottom-width: 1px;
+    border-bottom-color: #333333;
+}
+
+.search-input {
+    width: 300px;
+    height: 32px;
+    background-color: #0A0A0A;
+    border-width: 1px;
+    border-color: #333333;
+    border-radius: 0;
+    color: #FFFFFF;
+    font-size: 12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    margin-right: 16px;
+}
+
+.search-input:focus {
+    border-color: #C9A962;
+}
+
+.search-input > TextInput {
+    background-color: transparent;
+    border-width: 0;
+    color: #FFFFFF;
+    font-size: 12px;
+}
+
+.search-placeholder {
+    position: absolute;
+    left: 12px;
+    top: 7px;
+    color: #555555;
+    font-size: 12px;
+}
+
+/* --- Legend --- */
+.legend {
+    flex-direction: row;
+    align-items: center;
+    margin-left: 8px;
+}
+
+.legend-item {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 16px;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    margin-right: 6px;
+}
+
+.legend-dot.rank-subhq {
+    background-color: #EF4444;
+}
+
+.legend-dot.rank-distributor {
+    background-color: #F59E0B;
+}
+
+.legend-dot.rank-agency {
+    background-color: #10B981;
+}
+
+.legend-label {
+    font-size: 11px;
+    color: #AAAAAA;
+    letter-spacing: 1px;
+}
+
+/* --- Column Header --- */
+.column-header {
+    flex-direction: row;
+    align-items: center;
+    padding: 0 32px 0 56px;
+    height: 36px;
+    background-color: #C9A962;
+}
+
+.col-label {
+    font-size: 10px;
+    color: #0A0A0A;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    -unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* --- TreeView --- */
+.member-tree {
+    flex-grow: 1;
+    background-color: #1a1a1a;
+    border-width: 0;
+}
+
+.unity-tree-view__item {
+    border-bottom-width: 1px;
+    border-bottom-color: #222222;
+}
+
+.unity-tree-view__item:hover {
+    background-color: #252525;
+}
+
+.unity-tree-view__item--selected {
+    background-color: #2a2518 !important;
+    border-left-width: 3px;
+    border-left-color: #C9A962;
+}
+
+.unity-tree-view__item-toggle {
+    color: #C9A962;
+    margin-right: 4px;
+}
+
+/* --- Tree Row (custom item) --- */
+.tree-row {
+    flex-direction: row;
+    align-items: center;
+    height: 40px;
+    padding: 0 8px;
+}
+
+/* --- Cells --- */
+.tree-row > * {
+    font-size: 12px;
+    color: #DDDDDD;
+    -unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+}
+
+.cell-id {
+    color: #777777;
+    font-size: 11px;
+}
+
+.cell-username {
+    color: #FFFFFF;
+    -unity-font-style: bold;
+}
+
+.cell-name {
+    color: #CCCCCC;
+}
+
+.cell-phone {
+    color: #888888;
+    font-size: 11px;
+}
+
+.cell-balance {
+    color: #FFFFFF;
+    -unity-text-align: middle-right;
+    -unity-font-style: bold;
+}
+
+.cell-points {
+    color: #C9A962;
+    -unity-text-align: middle-right;
+}
+
+.cell-referrals {
+    -unity-text-align: middle-center;
+    color: #AAAAAA;
+}
+
+.cell-date {
+    color: #666666;
+    font-size: 11px;
+}
+
+/* --- Rank Badge --- */
+.cell-rank {
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    padding: 2px 8px;
+    border-radius: 0;
+    letter-spacing: 1px;
+}
+
+.cell-rank.rank-subhq {
+    background-color: #3B1111;
+    color: #EF4444;
+    border-width: 1px;
+    border-color: #EF4444;
+}
+
+.cell-rank.rank-distributor {
+    background-color: #3B2D0A;
+    color: #F59E0B;
+    border-width: 1px;
+    border-color: #F59E0B;
+}
+
+.cell-rank.rank-agency {
+    background-color: #0A2E1F;
+    color: #10B981;
+    border-width: 1px;
+    border-color: #10B981;
+}
+
+/* --- Status Badge --- */
+.cell-status {
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    padding: 2px 6px;
+    border-radius: 0;
+}
+
+.cell-status.status-active {
+    color: #10B981;
+}
+
+.cell-status.status-suspended {
+    color: #F59E0B;
+}
+
+.cell-status.status-banned {
+    color: #EF4444;
+}
+
+/* --- Footer --- */
+.footer {
+    flex-direction: row;
+    justify-content: center;
+    padding: 12px;
+    background-color: #111111;
+    border-top-width: 1px;
+    border-top-color: #333333;
+}
+
+.footer-text {
+    font-size: 10px;
+    color: #555555;
+    letter-spacing: 1px;
+}
