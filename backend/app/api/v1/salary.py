@@ -4,14 +4,14 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser
-from app.models.setting import AgentSalaryConfig
 from app.models.agent_salary_payment import AgentSalaryPayment
+from app.models.setting import AgentSalaryConfig
 from app.schemas.salary import (
     PaymentActionBody,
     PaymentSummaryResponse,

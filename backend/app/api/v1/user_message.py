@@ -1,14 +1,14 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, or_, and_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser
-from app.models.user import User
 from app.models.message import Message
+from app.models.user import User
 from app.schemas.user_message import (
     MessageCreate,
     MessageListResponse,

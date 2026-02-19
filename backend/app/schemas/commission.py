@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-
 # ─── Commission Policy ────────────────────────────────────────────
 
 class CommissionPolicyCreate(BaseModel):
@@ -17,7 +16,7 @@ class CommissionPolicyCreate(BaseModel):
     )
     game_category: str | None = Field(
         default=None,
-        pattern=r"^(casino|slot|mini_game|virtual_soccer|sports|esports|holdem)$",
+        pattern=r"^(casino|slot|holdem|sports|shooting|coin|mini_game)$",
     )
     min_bet_amount: Decimal = Field(default=Decimal("0"), ge=0)
     active: bool = True
@@ -93,7 +92,7 @@ class LedgerResponse(BaseModel):
     uuid: str
     agent_id: int
     user_id: int
-    policy_id: int
+    policy_id: int | None
     type: str
     level: int
     source_amount: Decimal
@@ -144,7 +143,7 @@ class AgentCommissionRateResponse(BaseModel):
 
 class AgentCommissionRateUpdate(BaseModel):
     game_category: str = Field(
-        pattern=r"^(casino|slot|mini_game|virtual_soccer|sports|esports|holdem)$",
+        pattern=r"^(casino|slot|holdem|sports|shooting|coin|mini_game)$",
     )
     commission_type: str = Field(pattern=r"^(rolling|losing)$")
     rate: Decimal = Field(ge=0, le=100)
@@ -160,7 +159,7 @@ class BetWebhook(BaseModel):
     """Webhook for a new bet event — triggers rolling commission."""
     user_id: int
     agent_id: int
-    game_category: str = Field(pattern=r"^(casino|slot|mini_game|virtual_soccer|sports|esports|holdem)$")
+    game_category: str = Field(pattern=r"^(casino|slot|holdem|sports|shooting|coin|mini_game)$")
     game_code: str | None = None
     round_id: str
     bet_amount: Decimal = Field(gt=0)
@@ -170,7 +169,7 @@ class RoundResultWebhook(BaseModel):
     """Webhook for game round result — triggers losing commission on losses."""
     user_id: int
     agent_id: int
-    game_category: str = Field(pattern=r"^(casino|slot|mini_game|virtual_soccer|sports|esports|holdem)$")
+    game_category: str = Field(pattern=r"^(casino|slot|holdem|sports|shooting|coin|mini_game)$")
     game_code: str | None = None
     round_id: str
     bet_amount: Decimal = Field(gt=0)

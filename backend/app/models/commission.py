@@ -52,7 +52,7 @@ class CommissionLedger(SQLModel, table=True):
 
     agent_id: int = Field(foreign_key="admin_users.id", index=True)
     user_id: int = Field(foreign_key="users.id", index=True)
-    policy_id: int = Field(foreign_key="commission_policies.id")
+    policy_id: int | None = Field(default=None, foreign_key="commission_policies.id")
 
     type: str = Field(max_length=20, index=True)  # rolling, losing, deposit
     level: int = Field(default=1)

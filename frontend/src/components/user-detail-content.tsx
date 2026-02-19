@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useUserDetail, resetUserPassword, setUserPassword, suspendUser } from '@/hooks/use-user-detail';
 import { updateUser } from '@/hooks/use-users';
+import { useToast } from '@/components/toast-provider';
 import { ArrowLeft, X, Edit, KeyRound, Lock, Ban } from 'lucide-react';
 import TabGeneral from '@/app/dashboard/users/[id]/tab-general';
 import TabBetting from '@/app/dashboard/users/[id]/tab-betting';
@@ -47,6 +48,7 @@ type Props = {
 
 export function UserDetailContent({ userId, onClose, isSheet }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const { data: detail, loading, refetch } = useUserDetail(userId);
   const [tab, setTab] = useState<TabKey>('general');
 
@@ -55,11 +57,27 @@ export function UserDetailContent({ userId, onClose, isSheet }: Props) {
   const [confirmDesc, setConfirmDesc] = useState('');
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
 
+  const [inputDialogOpen, setInputDialogOpen] = useState(false);
+  const [inputDialogTitle, setInputDialogTitle] = useState('');
+  const [inputDialogLabel, setInputDialogLabel] = useState('');
+  const [inputDialogType, setInputDialogType] = useState<'text' | 'password'>('text');
+  const [inputValue, setInputValue] = useState('');
+  const inputDialogCb = useRef<((value: string) => void) | null>(null);
+
   const openConfirm = (title: string, desc: string, action: () => void) => {
     setConfirmTitle(title);
     setConfirmDesc(desc);
     setConfirmAction(() => action);
     setConfirmOpen(true);
+  };
+
+  const openInputDialog = (title: string, label: string, type: 'text' | 'password', cb: (value: string) => void) => {
+    setInputDialogTitle(title);
+    setInputDialogLabel(label);
+    setInputDialogType(type);
+    setInputValue('');
+    inputDialogCb.current = cb;
+    setInputDialogOpen(true);
   };
 
   const user = detail?.user;
@@ -68,18 +86,19 @@ export function UserDetailContent({ userId, onClose, isSheet }: Props) {
     openConfirm('비밀번호 초기화', '비밀번호를 초기화하시겠습니까?', async () => {
       try {
         await resetUserPassword(userId);
-        alert('비밀번호가 초기화되었습니다.');
-      } catch { alert('비밀번호 초기화 실패'); }
+        toast.success('비밀번호가 초기화되었습니다.');
+      } catch { toast.error('비밀번호 초기화 실패'); }
     });
   };
 
-  const handleSetPassword = async () => {
-    const pw = prompt('새 비밀번호를 입력하세요 (6자 이상):');
-    if (!pw || pw.length < 6) { alert('비밀번호는 6자 이상이어야 합니다.'); return; }
-    try {
-      await setUserPassword(userId, pw);
-      alert('비밀번호가 지정되었습니다.');
-    } catch { alert('비밀번호 지정 실패'); }
+  const handleSetPassword = () => {
+    openInputDialog('비밀번호 지정', '새 비밀번호 (8자 이상)', 'password', async (pw) => {
+      if (pw.length < 8) { toast.warning('비밀번호는 8자 이상이어야 합니다.'); return; }
+      try {
+        await setUserPassword(userId, pw);
+        toast.success('비밀번호가 지정되었습니다.');
+      } catch { toast.error('비밀번호 지정 실패'); }
+    });
   };
 
   const handleSuspend = async () => {
@@ -89,15 +108,15 @@ export function UserDetailContent({ userId, onClose, isSheet }: Props) {
         try {
           await updateUser(userId, { status: 'active' });
           refetch();
-        } catch { alert('정지 해제 실패'); }
+        } catch { toast.error('정지 해제 실패'); }
       });
     } else {
-      const reason = prompt('정지 사유를 입력하세요:');
-      if (reason === null) return;
-      try {
-        await suspendUser(userId, reason || undefined);
-        refetch();
-      } catch { alert('정지 실패'); }
+      openInputDialog('회원 정지', '정지 사유', 'text', async (reason) => {
+        try {
+          await suspendUser(userId, reason || undefined);
+          refetch();
+        } catch { toast.error('정지 실패'); }
+      });
     }
   };
 
@@ -124,6 +143,44 @@ export function UserDetailContent({ userId, onClose, isSheet }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={() => { confirmAction?.(); setConfirmOpen(false); }}>
+              확인
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={inputDialogOpen} onOpenChange={setInputDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{inputDialogTitle}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <label htmlFor="input-dialog-field" className="text-sm font-medium">{inputDialogLabel}</label>
+            <input
+              id="input-dialog-field"
+              type={inputDialogType}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && inputValue.trim()) {
+                  inputDialogCb.current?.(inputValue.trim());
+                  setInputDialogOpen(false);
+                }
+              }}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (inputValue.trim()) {
+                  inputDialogCb.current?.(inputValue.trim());
+                }
+                setInputDialogOpen(false);
+              }}
+            >
               확인
             </AlertDialogAction>
           </AlertDialogFooter>

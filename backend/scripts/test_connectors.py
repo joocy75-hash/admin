@@ -113,7 +113,7 @@ print("\n6. Connector list has required fields")
 if d:
     first = d[0]
     has_fields = all(k in first for k in ["provider_id", "name", "code", "category", "is_connected", "game_count"])
-    check(f"Required fields present", has_fields)
+    check("Required fields present", has_fields)
 else:
     check("Has items", False)
 
@@ -128,7 +128,7 @@ check(f"Test -> {s}, success={d.get('success')}", s == 200 and "success" in d an
 
 print("\n8. Test connection (unconfigured provider)")
 s, d = api("POST", f"/connectors/{NOAPI_PROVIDER_ID}/test", token=TOKEN)
-check(f"No config -> success=False", s == 200 and d.get("success") is False)
+check("No config -> success=False", s == 200 and d.get("success") is False)
 
 print("\n9. Test connection (non-existent provider)")
 s, d = api("POST", "/connectors/99999/test", token=TOKEN)
@@ -186,7 +186,7 @@ check(f"Event type -> {d.get('event_type')}", s == 200 and d.get("event_type") =
 print("\n16. Get connector status (casino)")
 s, d = api("GET", f"/connectors/{CASINO_PROVIDER_ID}/status", token=TOKEN)
 check(f"Status -> {s}, connected={d.get('is_connected')}", s == 200 and d.get("is_connected") is True)
-check(f"Has game_count field", "game_count" in d)
+check("Has game_count field", "game_count" in d)
 
 print("\n17. Get connector status (unconfigured)")
 s, d = api("GET", f"/connectors/{NOAPI_PROVIDER_ID}/status", token=TOKEN)

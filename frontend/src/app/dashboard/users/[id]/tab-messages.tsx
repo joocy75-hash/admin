@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUserMessages, sendMessage, markMessageRead, type Message } from '@/hooks/use-user-detail';
+import { useToast } from '@/components/toast-provider';
 import { Send, Mail, MailOpen, Inbox } from 'lucide-react';
 
 type Props = { userId: number };
 
 export default function TabMessages({ userId }: Props) {
+  const toast = useToast();
   const [page, setPage] = useState(1);
   const [direction, setDirection] = useState('');
   const [showSendForm, setShowSendForm] = useState(false);
@@ -27,7 +29,7 @@ export default function TabMessages({ userId }: Props) {
 
   const handleSend = async () => {
     if (!sendForm.title.trim() || !sendForm.content.trim()) {
-      alert('제목과 내용을 입력하세요');
+      toast.warning('제목과 내용을 입력하세요');
       return;
     }
     setSending(true);
@@ -36,7 +38,7 @@ export default function TabMessages({ userId }: Props) {
       setSendForm({ title: '', content: '' });
       setShowSendForm(false);
       refetch();
-    } catch { alert('쪽지 발송 실패'); }
+    } catch { toast.error('쪽지 발송 실패'); }
     finally { setSending(false); }
   };
 

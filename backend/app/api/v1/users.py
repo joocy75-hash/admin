@@ -6,22 +6,18 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser, AdminUserTree
 from app.models.user import User, UserTree
-from app.models.user_wallet_address import UserWalletAddress
 from app.models.user_betting_permission import UserBettingPermission
-from app.models.user_null_betting_config import UserNullBettingConfig
 from app.models.user_game_rolling_rate import UserGameRollingRate
+from app.models.user_null_betting_config import UserNullBettingConfig
+from app.models.user_wallet_address import UserWalletAddress
 from app.schemas.user import (
-    WalletAddressCreate,
-    WalletAddressResponse,
-    WalletAddressUpdate,
     BettingPermissionResponse,
     BettingPermissionUpdate,
     BulkStatusUpdate,
@@ -39,21 +35,21 @@ from app.schemas.user import (
     UserTreeNode,
     UserTreeResponse,
     UserUpdate,
+    WalletAddressCreate,
+    WalletAddressResponse,
+    WalletAddressUpdate,
 )
+from app.services import notification_service
+from app.services.promotion_service import cascade_promotion_check
 from app.services.user_tree_service import (
-    insert_node,
+    get_ancestors,
     get_direct_referral_count,
     get_subtree_for_tree_view,
-    get_ancestors,
-    get_children,
+    insert_node,
 )
-from app.services.promotion_service import cascade_promotion_check
-from app.services import notification_service
 from app.utils.security import hash_password
 
 router = APIRouter(prefix="/users", tags=["users"])
-
-Referrer = aliased(User)
 
 
 async def _build_response(session: AsyncSession, user: User) -> UserResponse:
@@ -87,6 +83,9 @@ async def _build_response(session: AsyncSession, user: User) -> UserResponse:
         login_count=user.login_count,
         last_deposit_at=user.last_deposit_at,
         last_bet_at=user.last_bet_at,
+        commission_enabled=user.commission_enabled,
+        commission_type=user.commission_type,
+        losing_rate=user.losing_rate,
         memo=user.memo,
         last_login_at=user.last_login_at,
         created_at=user.created_at,
@@ -150,6 +149,9 @@ async def _build_response_batch(
             login_count=user.login_count,
             last_deposit_at=user.last_deposit_at,
             last_bet_at=user.last_bet_at,
+            commission_enabled=user.commission_enabled,
+            commission_type=user.commission_type,
+            losing_rate=user.losing_rate,
             memo=user.memo,
             last_login_at=user.last_login_at,
             created_at=user.created_at,
@@ -170,40 +172,43 @@ async def _verify_user_access(
     current_user: AdminUser,
     target_user_id: int,
 ) -> None:
+    """Verify admin has access to the target user.
+
+    super_admin: unrestricted access.
+    Other roles: check if target user's referral chain intersects with the
+    set of users managed by any agent in the current admin's subtree.
+    """
     if current_user.role == "super_admin":
         return
-    # Get all descendant agent IDs in current_user's subtree (including self)
+
+    # Get all admin IDs in current_user's subtree (including self)
     descendant_stmt = select(AdminUserTree.descendant_id).where(
         AdminUserTree.ancestor_id == current_user.id,
     )
     descendant_result = await session.execute(descendant_stmt)
     subtree_agent_ids = {r[0] for r in descendant_result.all()}
 
-    # Walk up the target user's referrer chain to find an agent in the subtree
-    user = await session.get(User, target_user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Get usernames of agents in the subtree to cross-reference with user referral chain
+    agent_stmt = select(AdminUser.username).where(AdminUser.id.in_(subtree_agent_ids))
+    agent_result = await session.execute(agent_stmt)
+    agent_usernames = {r[0] for r in agent_result.all()}
 
-    # Check if any ancestor in the user's referral tree has a referrer_id
-    # that maps to an agent in the admin subtree.
-    # Walk the user_tree ancestors to check if the user belongs to this agent's scope.
-    ancestor_stmt = (
-        select(UserTree.ancestor_id)
-        .where(UserTree.descendant_id == target_user_id)
+    # Walk the target user's referral ancestor chain (via user_tree)
+    # Check if any user in the chain has a username matching an agent in the subtree
+    ancestor_stmt = select(UserTree.ancestor_id).where(
+        UserTree.descendant_id == target_user_id,
     )
     ancestor_result = await session.execute(ancestor_stmt)
     user_ancestor_ids = {r[0] for r in ancestor_result.all()}
+    user_ancestor_ids.add(target_user_id)
 
-    # The user or any of their ancestors should be "owned" by an agent in the subtree.
-    # We check if any user_ancestor_id matches an agent's managed user set.
-    # In this system, users are linked to agents via referrer_id.
-    # A simple check: current agent's ID should appear somewhere in the user's ancestor chain
-    # OR the user_id itself should be in a set managed by the agent subtree.
-    # Since users and agents are in separate tables, we check if the current_user.id
-    # is in the user's referrer chain (user referrer_id points to other users, not agents directly).
-    # The practical approach: agents see users they or their sub-agents created.
-    # Users' referrer_id points to other users, so we check the admin_user_tree for subtree scope.
-    if current_user.id in subtree_agent_ids:
+    # Fetch usernames for all ancestors + target user
+    user_stmt = select(User.username).where(User.id.in_(user_ancestor_ids))
+    user_result = await session.execute(user_stmt)
+    ancestor_usernames = {r[0] for r in user_result.all()}
+
+    # Check if the user's referral chain intersects with the admin's agent scope
+    if agent_usernames & ancestor_usernames:
         return
 
     raise HTTPException(
@@ -228,11 +233,12 @@ async def list_users(
     base = select(User)
 
     if search:
+        safe_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         base = base.where(
             or_(
-                User.username.ilike(f"%{search}%"),
-                User.real_name.ilike(f"%{search}%"),
-                User.phone.ilike(f"%{search}%"),
+                User.username.ilike(f"%{safe_search}%", escape="\\"),
+                User.real_name.ilike(f"%{safe_search}%", escape="\\"),
+                User.phone.ilike(f"%{safe_search}%", escape="\\"),
             )
         )
     if status_filter:
@@ -262,17 +268,20 @@ async def get_user_summary_stats(
     session: AsyncSession = Depends(get_session),
     _: AdminUser = Depends(PermissionChecker("users.view")),
 ):
-    total = (await session.execute(select(func.count(User.id)))).scalar() or 0
-    active = (await session.execute(select(func.count(User.id)).where(User.status == "active"))).scalar() or 0
-    suspended = (await session.execute(select(func.count(User.id)).where(User.status == "suspended"))).scalar() or 0
-    banned = (await session.execute(select(func.count(User.id)).where(User.status == "banned"))).scalar() or 0
-    pending = (await session.execute(select(func.count(User.id)).where(User.status == "pending"))).scalar() or 0
-    bal = (await session.execute(select(func.coalesce(func.sum(User.balance), 0)))).scalar() or 0
-    pts = (await session.execute(select(func.coalesce(func.sum(User.points), 0)))).scalar() or 0
+    stmt = select(
+        func.count(User.id).label("total"),
+        func.count(User.id).filter(User.status == "active").label("active"),
+        func.count(User.id).filter(User.status == "suspended").label("suspended"),
+        func.count(User.id).filter(User.status == "banned").label("banned"),
+        func.count(User.id).filter(User.status == "pending").label("pending"),
+        func.coalesce(func.sum(User.balance), 0).label("bal"),
+        func.coalesce(func.sum(User.points), 0).label("pts"),
+    )
+    row = (await session.execute(stmt)).one()
     return UserSummaryStats(
-        total_count=total, active_count=active, suspended_count=suspended,
-        banned_count=banned, pending_count=pending,
-        total_balance=float(bal), total_points=float(pts),
+        total_count=row.total, active_count=row.active, suspended_count=row.suspended,
+        banned_count=row.banned, pending_count=row.pending,
+        total_balance=float(row.bal), total_points=float(row.pts),
     )
 
 
@@ -298,7 +307,7 @@ async def bulk_update_status(
         missing_ids = [uid for uid in body.user_ids if uid not in found_ids]
         raise HTTPException(status_code=404, detail=f"Users not found: {missing_ids}")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     updated_count = 0
     for user in users:
         if user.status != body.status:
@@ -389,10 +398,32 @@ async def update_user(
     await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
 
-    update_data = body.model_dump(exclude_unset=True)
+    ALLOWED_UPDATE_FIELDS = {
+        "real_name", "phone", "email", "nickname", "color",
+        "status", "level", "commission_enabled", "commission_type",
+        "losing_rate", "memo",
+    }
+    update_data = {
+        k: v for k, v in body.model_dump(exclude_unset=True).items()
+        if k in ALLOWED_UPDATE_FIELDS
+    }
+
+    # Validate losing_rate: child <= parent
+    if "losing_rate" in update_data and update_data["losing_rate"] is not None:
+        new_lr = Decimal(str(update_data["losing_rate"]))
+        if new_lr > Decimal("50"):
+            raise HTTPException(status_code=400, detail="죽장율은 최대 50%입니다")
+        if user.referrer_id:
+            parent = await session.get(User, user.referrer_id)
+            if parent and new_lr > parent.losing_rate:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"죽장율이 상위 회원({parent.losing_rate}%)보다 높을 수 없습니다",
+                )
+
     for field, value in update_data.items():
         setattr(user, field, value)
-    user.updated_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     session.add(user)
     await session.commit()
@@ -411,7 +442,7 @@ async def delete_user(
     await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
     user.status = "banned"
-    user.updated_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(user)
     await session.commit()
 
@@ -517,6 +548,7 @@ async def list_wallet_addresses(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.view")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     await _get_user_or_404(session, user_id)
     result = await session.execute(
         select(UserWalletAddress).where(UserWalletAddress.user_id == user_id)
@@ -542,6 +574,7 @@ async def create_wallet_address(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     await _get_user_or_404(session, user_id)
 
     if body.is_primary:
@@ -572,6 +605,7 @@ async def update_wallet_address(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     await _get_user_or_404(session, user_id)
     wallet = await session.get(UserWalletAddress, wallet_id)
     if not wallet or wallet.user_id != user_id:
@@ -592,7 +626,7 @@ async def update_wallet_address(
 
     for field, value in update_data.items():
         setattr(wallet, field, value)
-    wallet.updated_at = datetime.now(timezone.utc)
+    wallet.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(wallet)
     await session.commit()
     await session.refresh(wallet)
@@ -613,6 +647,7 @@ async def delete_wallet_address(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     await _get_user_or_404(session, user_id)
     wallet = await session.get(UserWalletAddress, wallet_id)
     if not wallet or wallet.user_id != user_id:
@@ -630,6 +665,7 @@ async def update_betting_permissions(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     await _get_user_or_404(session, user_id)
 
     for item in body:
@@ -640,7 +676,7 @@ async def update_betting_permissions(
         existing = (await session.execute(stmt)).scalar_one_or_none()
         if existing:
             existing.is_allowed = item.is_allowed
-            existing.updated_at = datetime.now(timezone.utc)
+            existing.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             session.add(existing)
         else:
             bp = UserBettingPermission(
@@ -670,6 +706,7 @@ async def update_null_betting(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     await _get_user_or_404(session, user_id)
 
     for item in body:
@@ -681,7 +718,7 @@ async def update_null_betting(
         if existing:
             existing.every_n_bets = item.every_n_bets
             existing.inherit_to_children = item.inherit_to_children
-            existing.updated_at = datetime.now(timezone.utc)
+            existing.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             session.add(existing)
         else:
             nbc = UserNullBettingConfig(
@@ -708,6 +745,17 @@ async def update_null_betting(
 
 # ─── Game Rolling Rates ──────────────────────────────────────────
 
+ROLLING_MAX_RATES: dict[str, Decimal] = {
+    "casino": Decimal("1.5"),
+    "slot": Decimal("5"),
+    "holdem": Decimal("5"),
+    "sports": Decimal("5"),
+    "shooting": Decimal("5"),
+    "coin": Decimal("5"),
+    "mini_game": Decimal("3"),
+}
+
+
 @router.put("/{user_id}/rolling-rates", response_model=list[GameRollingRateResponse])
 async def update_rolling_rates(
     user_id: int,
@@ -715,7 +763,32 @@ async def update_rolling_rates(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
-    await _get_user_or_404(session, user_id)
+    await _verify_user_access(session, current_user, user_id)
+    user = await _get_user_or_404(session, user_id)
+
+    # Validate max rates per game category
+    for item in body:
+        max_rate = ROLLING_MAX_RATES.get(item.game_category)
+        if max_rate and item.rolling_rate > max_rate:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{item.game_category} 롤링율은 최대 {max_rate}%입니다 (입력: {item.rolling_rate}%)",
+            )
+
+    # Validate child <= parent (referrer) rate
+    if user.referrer_id:
+        for item in body:
+            stmt = select(UserGameRollingRate).where(
+                UserGameRollingRate.user_id == user.referrer_id,
+                UserGameRollingRate.game_category == item.game_category,
+                UserGameRollingRate.provider == item.provider,
+            )
+            parent_rate_row = (await session.execute(stmt)).scalar_one_or_none()
+            if parent_rate_row and item.rolling_rate > parent_rate_row.rolling_rate:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{item.game_category} 롤링율이 상위 회원({parent_rate_row.rolling_rate}%)보다 높을 수 없습니다",
+                )
 
     for item in body:
         stmt = select(UserGameRollingRate).where(
@@ -726,7 +799,7 @@ async def update_rolling_rates(
         existing = (await session.execute(stmt)).scalar_one_or_none()
         if existing:
             existing.rolling_rate = item.rolling_rate
-            existing.updated_at = datetime.now(timezone.utc)
+            existing.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             session.add(existing)
         else:
             grr = UserGameRollingRate(
@@ -759,11 +832,12 @@ async def reset_password(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
     chars = string.ascii_letters + string.digits
     temp_password = ''.join(secrets.choice(chars) for _ in range(8))
     user.password_hash = hash_password(temp_password)
-    user.updated_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(user)
     await session.commit()
     return {"temporary_password": temp_password}
@@ -776,9 +850,10 @@ async def set_password(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
     user.password_hash = hash_password(body.new_password)
-    user.updated_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(user)
     await session.commit()
 
@@ -791,9 +866,10 @@ async def suspend_user(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.update")),
 ):
+    await _verify_user_access(session, current_user, user_id)
     user = await _get_user_or_404(session, user_id)
     user.status = "suspended"
-    user.updated_at = datetime.now(timezone.utc)
+    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(user)
     await session.commit()
     await session.refresh(user)
@@ -808,7 +884,8 @@ async def get_user_tree(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.view")),
 ):
-    user = await _get_user_or_404(session, user_id)
+    await _verify_user_access(session, current_user, user_id)
+    await _get_user_or_404(session, user_id)
     nodes_data = await get_subtree_for_tree_view(session, user_id)
     nodes = [UserTreeNode(**n) for n in nodes_data]
     return UserTreeResponse(nodes=nodes)
@@ -824,7 +901,8 @@ async def get_user_referrals(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.view")),
 ):
-    user = await _get_user_or_404(session, user_id)
+    await _verify_user_access(session, current_user, user_id)
+    await _get_user_or_404(session, user_id)
 
     base = select(User).where(User.referrer_id == user_id)
     count_stmt = select(func.count()).select_from(base.subquery())
@@ -848,8 +926,10 @@ async def get_user_ancestors(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("users.view")),
 ):
-    user = await _get_user_or_404(session, user_id)
+    await _verify_user_access(session, current_user, user_id)
+    await _get_user_or_404(session, user_id)
 
     ancestor_data = await get_ancestors(session, user_id)
-    items = [await _build_response(session, a["user"]) for a in ancestor_data]
+    ancestor_users = [a["user"] for a in ancestor_data]
+    items = await _build_response_batch(session, ancestor_users)
     return UserListResponse(items=items, total=len(items), page=1, page_size=len(items) or 1)

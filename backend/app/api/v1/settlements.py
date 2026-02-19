@@ -3,12 +3,12 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser
 from app.models.settlement import Settlement
 from app.schemas.settlement import (
@@ -77,7 +77,7 @@ async def list_settlements(
     agent_id: int | None = Query(None),
     status_filter: str | None = Query(None, alias="status"),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("settlements.view")),
+    current_user: AdminUser = Depends(PermissionChecker("settlement.view")),
 ):
     base = select(Settlement)
     if agent_id:
@@ -109,7 +109,7 @@ async def settlement_preview(
     period_start: str = Query(..., description="YYYY-MM-DD"),
     period_end: str = Query(..., description="YYYY-MM-DD"),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("settlements.create")),
+    current_user: AdminUser = Depends(PermissionChecker("settlement.create")),
 ):
     try:
         data = await preview_settlement(
@@ -126,7 +126,7 @@ async def settlement_preview(
 async def create_settlement_endpoint(
     body: SettlementCreate,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("settlements.create")),
+    current_user: AdminUser = Depends(PermissionChecker("settlement.create")),
 ):
     try:
         settlement = await create_settlement(
@@ -149,7 +149,7 @@ async def create_settlement_endpoint(
 async def get_settlement(
     settlement_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("settlements.view")),
+    current_user: AdminUser = Depends(PermissionChecker("settlement.view")),
 ):
     settlement = await session.get(Settlement, settlement_id)
     if not settlement:
@@ -164,7 +164,7 @@ async def confirm_settlement_endpoint(
     settlement_id: int,
     body: SettlementAction = SettlementAction(),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("settlements.approve")),
+    current_user: AdminUser = Depends(PermissionChecker("settlement.approve")),
 ):
     try:
         settlement = await confirm_settlement(session, settlement_id, current_user.id)
@@ -184,7 +184,7 @@ async def reject_settlement_endpoint(
     settlement_id: int,
     body: SettlementAction = SettlementAction(),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("settlements.approve")),
+    current_user: AdminUser = Depends(PermissionChecker("settlement.approve")),
 ):
     try:
         settlement = await reject_settlement(session, settlement_id)
@@ -203,7 +203,7 @@ async def reject_settlement_endpoint(
 async def pay_settlement_endpoint(
     settlement_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("settlements.approve")),
+    current_user: AdminUser = Depends(PermissionChecker("settlement.approve")),
 ):
     try:
         settlement = await pay_settlement(session, settlement_id)

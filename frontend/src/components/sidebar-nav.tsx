@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
-  Network,
   Percent,
   Calculator,
   Wallet,
@@ -30,6 +29,15 @@ import {
   FileCheck,
   PieChart,
   Database,
+  CalendarCheck,
+  Disc3,
+  RotateCcw,
+  BadgePlus,
+  Coins,
+  ArrowLeftRight,
+  MessageSquare,
+  Target,
+  FileText,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { apiClient } from '@/lib/api-client';
@@ -38,7 +46,6 @@ import { ThemeToggle } from '@/components/theme-toggle';
 
 const navItems = [
   { label: '대시보드', href: '/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
-  { label: '에이전트 관리', href: '/dashboard/agents', icon: Network, permission: 'agents.view' },
   { label: '회원 관리', href: '/dashboard/users', icon: Users, permission: 'users.view' },
   { label: '커미션', href: '/dashboard/commissions', icon: Percent, permission: 'commission.view' },
   { label: '정산', href: '/dashboard/settlements', icon: Calculator, permission: 'settlement.view' },
@@ -47,10 +54,19 @@ const navItems = [
   { label: 'VIP 등급', href: '/dashboard/vip', icon: Crown, permission: 'users.view' },
   { label: '한도 관리', href: '/dashboard/limits', icon: ShieldCheck, permission: 'setting.view' },
   { label: '프로모션', href: '/dashboard/promotions', icon: Gift, permission: 'announcement.view' },
-  { label: '급여 관리', href: '/dashboard/salary', icon: Banknote, permission: 'agents.view' },
+  { label: '출석 보상', href: '/dashboard/attendance', icon: CalendarCheck, permission: 'attendance.view' },
+  { label: '럭키스핀', href: '/dashboard/spin', icon: Disc3, permission: 'spin.view' },
+  { label: '페이백', href: '/dashboard/payback', icon: RotateCcw, permission: 'payback.view' },
+  { label: '입금보너스', href: '/dashboard/deposit-bonus', icon: BadgePlus, permission: 'deposit_bonus.view' },
+  { label: '포인트 설정', href: '/dashboard/point-config', icon: Coins, permission: 'setting.view' },
+  { label: '환율 관리', href: '/dashboard/exchange-rates', icon: ArrowLeftRight, permission: 'setting.view' },
+  { label: '팝업 공지', href: '/dashboard/popups', icon: MessageSquare, permission: 'popup.view' },
+  { label: '미션 관리', href: '/dashboard/missions', icon: Target, permission: 'mission.view' },
+  { label: '급여 관리', href: '/dashboard/salary', icon: Banknote, permission: 'salary.view' },
   { label: '파트너', href: '/dashboard/partner', icon: Handshake, permission: 'partner.view' },
   { label: '리포트', href: '/dashboard/reports', icon: BarChart3, permission: 'report.view' },
   { label: '감사 로그', href: '/dashboard/audit', icon: ScrollText, permission: 'audit_log.view' },
+  { label: '관리자 로그', href: '/dashboard/admin-logs', icon: FileText, permission: 'audit_log.view' },
   { label: '공지 관리', href: '/dashboard/announcements', icon: Megaphone, permission: 'announcement.view' },
   { label: '알림', href: '/dashboard/notifications', icon: Bell, permission: 'notification.view' },
   { label: 'FDS', href: '/dashboard/fraud', icon: ShieldAlert, permission: 'fraud.view' },

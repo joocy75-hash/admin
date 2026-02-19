@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useGameList, useProviderList, deleteGame } from '@/hooks/use-games';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/toast-provider';
 import { AlertCircle, Gamepad2 } from 'lucide-react';
 
 const CATEGORY_TABS = [
@@ -29,6 +30,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function GamesPage() {
+  const toast = useToast();
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
   const [providerFilter, setProviderFilter] = useState('');
@@ -52,7 +54,7 @@ export default function GamesPage() {
       await deleteGame(id);
       refetch();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제 실패');
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
     }
   };
 

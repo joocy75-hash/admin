@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useAnnouncements, deleteAnnouncement } from '@/hooks/use-announcements';
+import { useToast } from '@/components/toast-provider';
 
 const TYPE_TABS = [
   { key: '', label: '전체' },
@@ -24,6 +25,7 @@ const TARGET_LABELS: Record<string, string> = {
 };
 
 export default function AnnouncementsPage() {
+  const toast = useToast();
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -41,7 +43,7 @@ export default function AnnouncementsPage() {
       await deleteAnnouncement(id);
       refetch();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제 실패');
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
     }
   };
 

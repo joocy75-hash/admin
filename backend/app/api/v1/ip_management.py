@@ -1,14 +1,15 @@
 """IP restriction management endpoints."""
 
 from datetime import datetime, timezone
-from ipaddress import ip_address as parse_ip, ip_network
+from ipaddress import ip_address as parse_ip
+from ipaddress import ip_network
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, case
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser
 from app.models.ip_restriction import IpRestriction
 from app.schemas.ip_management import (

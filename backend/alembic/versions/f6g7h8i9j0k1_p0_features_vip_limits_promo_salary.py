@@ -16,11 +16,13 @@ Revises: e5f6g7h8i9j0
 Create Date: 2026-02-18 23:00:00.000000
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
+
+from alembic import op
 
 revision: str = "f6g7h8i9j0k1"
 down_revision: Union[str, None] = "e5f6g7h8i9j0"

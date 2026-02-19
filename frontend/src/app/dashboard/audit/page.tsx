@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuditLogs, exportAuditCSV, type AuditLogItem } from '@/hooks/use-audit';
+import { useToast } from '@/components/toast-provider';
 
 const ACTION_OPTIONS = [
   { value: '', label: '전체 액션' },
@@ -39,6 +40,7 @@ const ACTION_STYLES: Record<string, string> = {
 };
 
 export default function AuditPage() {
+  const toast = useToast();
   const [action, setAction] = useState('');
   const [module, setModule] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -66,7 +68,7 @@ export default function AuditPage() {
         end_date: endDate || undefined,
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : '내보내기 실패');
+      toast.error(err instanceof Error ? err.message : '내보내기 실패');
     } finally {
       setExporting(false);
     }

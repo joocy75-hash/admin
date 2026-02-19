@@ -9,10 +9,12 @@ Revises: c3d4e5f6g7h8
 Create Date: 2026-02-18 20:00:00.000000
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
+
+import sqlalchemy as sa
 
 from alembic import op
-import sqlalchemy as sa
 
 revision: str = "d4e5f6g7h8i9"
 down_revision: Union[str, None] = "c3d4e5f6g7h8"

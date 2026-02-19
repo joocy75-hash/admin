@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useGame, useProviderList, useGameRoundList, updateGame, deleteGame } from '@/hooks/use-games';
+import { useToast } from '@/components/toast-provider';
 
 const CATEGORIES = [
   { value: 'casino', label: '카지노' },
@@ -27,6 +28,7 @@ const RESULT_LABELS: Record<string, string> = {
 export default function GameDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const gameId = Number(params.id);
 
   const { data: game, loading } = useGame(gameId);
@@ -89,7 +91,7 @@ export default function GameDetailPage() {
       await deleteGame(gameId);
       router.push('/dashboard/games');
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제 실패');
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
     }
   };
 

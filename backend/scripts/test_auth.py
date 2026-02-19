@@ -80,7 +80,7 @@ def test_auth():
         "current_password": "newpass1234",
         "new_password": "admin1234!",
     })
-    print(f"\n=== 8. Revert Password ===")
+    print("\n=== 8. Revert Password ===")
     print(f"Status: {r.status_code} -> {r.json()}")
     assert r.status_code == 200
 

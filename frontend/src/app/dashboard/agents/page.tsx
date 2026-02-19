@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAgentList, deleteAgent, type Agent } from '@/hooks/use-agents';
+import { useToast } from '@/components/toast-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Plus,
@@ -45,6 +46,7 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | '
 
 export default function AgentsPage() {
   const router = useRouter();
+  const toast = useToast();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -69,7 +71,7 @@ export default function AgentsPage() {
       await deleteAgent(agent.id);
       refetch();
     } catch {
-      alert('삭제 실패');
+      toast.error('삭제 실패');
     }
   };
 

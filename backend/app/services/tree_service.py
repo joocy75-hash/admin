@@ -1,6 +1,6 @@
 """Closure Table operations for agent hierarchy."""
 
-from sqlalchemy import delete, select, func, and_
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_user import AdminUser, AdminUserTree

@@ -58,6 +58,9 @@ export type UserDetailData = {
     login_count: number;
     last_deposit_at: string | null;
     last_bet_at: string | null;
+    commission_enabled: boolean;
+    commission_type: 'rolling' | 'losing';
+    losing_rate: number;
   };
   statistics: UserStatistics;
   wallet_addresses: WalletAddress[];
@@ -403,6 +406,14 @@ export async function updateNullBettingConfig(userId: number, gameCategory: stri
 
 export async function updateGameRollingRate(userId: number, gameCategory: string, rollingRate: number, provider?: string) {
   return apiClient.put(`/api/v1/users/${userId}/rolling-rates`, [{ game_category: gameCategory, provider: provider || null, rolling_rate: rollingRate }]);
+}
+
+export async function toggleCommissionEnabled(userId: number, enabled: boolean) {
+  return apiClient.put(`/api/v1/users/${userId}`, { commission_enabled: enabled });
+}
+
+export async function updateCommissionSettings(userId: number, data: { commission_type?: string; losing_rate?: number; commission_enabled?: boolean }) {
+  return apiClient.put(`/api/v1/users/${userId}`, data);
 }
 
 export async function createWalletAddress(userId: number, data: { coin_type: string; network: string; address: string; label?: string; is_primary?: boolean }) {

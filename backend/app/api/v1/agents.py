@@ -1,45 +1,43 @@
 """Agent CRUD, tree management, and commission rate endpoints."""
 
 from datetime import datetime, timezone
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, or_, and_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import PermissionChecker
 from app.database import get_session
-from app.api.deps import PermissionChecker, get_current_user
 from app.models.admin_user import AdminUser, AdminUserTree
 from app.models.agent_commission_rate import AgentCommissionRate
 from app.models.role import AdminUserRole, Role
 from app.schemas.agent import (
-    AgentCreate,
-    AgentUpdate,
-    AgentResponse,
-    AgentListResponse,
     AgentAncestor,
+    AgentCreate,
+    AgentListResponse,
     AgentMoveRequest,
+    AgentResponse,
     AgentTreeResponse,
+    AgentUpdate,
     PasswordResetRequest,
 )
 from app.schemas.commission import (
+    AgentCommissionRateBulkUpdate,
     AgentCommissionRateResponse,
     AgentCommissionRateUpdate,
-    AgentCommissionRateBulkUpdate,
-)
-from app.services.tree_service import (
-    insert_node,
-    get_descendants,
-    get_children,
-    get_ancestors,
-    get_descendant_count,
-    get_subtree_for_tree_view,
-    move_node,
-    is_ancestor,
 )
 from app.services.commission_engine import (
-    validate_rate_against_parent,
     validate_rate_against_children,
+    validate_rate_against_parent,
+)
+from app.services.tree_service import (
+    get_ancestors,
+    get_children,
+    get_descendant_count,
+    get_subtree_for_tree_view,
+    insert_node,
+    is_ancestor,
+    move_node,
 )
 from app.utils.security import hash_password
 
@@ -110,11 +108,13 @@ async def list_agents(
     base = select(AdminUser).where(AdminUser.role != "super_admin")
 
     if search:
+        safe_search = search.replace("%", r"\%").replace("_", r"\_")
+        like_pattern = f"%{safe_search}%"
         base = base.where(
             or_(
-                AdminUser.username.ilike(f"%{search}%"),
-                AdminUser.agent_code.ilike(f"%{search}%"),
-                AdminUser.email.ilike(f"%{search}%"),
+                AdminUser.username.ilike(like_pattern),
+                AdminUser.agent_code.ilike(like_pattern),
+                AdminUser.email.ilike(like_pattern),
             )
         )
     if role:
@@ -238,9 +238,11 @@ async def update_agent(
     if not user:
         raise HTTPException(status_code=404, detail="Agent not found")
 
+    ALLOWED_UPDATE_FIELDS = {"email", "role", "status", "max_sub_agents", "rolling_rate", "losing_rate", "deposit_rate", "memo"}
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(user, field, value)
+        if field in ALLOWED_UPDATE_FIELDS:
+            setattr(user, field, value)
     user.updated_at = datetime.now(timezone.utc)
 
     session.add(user)
@@ -381,7 +383,7 @@ async def move_agent(
 
 # ─── Commission Rates (Hierarchical) ─────────────────────────────
 
-GAME_CATEGORIES = ["casino", "slot", "mini_game", "virtual_soccer", "sports", "esports", "holdem"]
+GAME_CATEGORIES = ["casino", "slot", "holdem", "sports", "shooting", "coin", "mini_game"]
 COMMISSION_TYPES = ["rolling", "losing"]
 
 
@@ -390,7 +392,7 @@ async def get_agent_commission_rates(
     agent_id: int,
     commission_type: str | None = Query(None, pattern=r"^(rolling|losing)$"),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.view")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.view")),
 ):
     """Get all commission rates for an agent, grouped by game category and type."""
     user = await session.get(AdminUser, agent_id)
@@ -428,7 +430,7 @@ async def set_agent_commission_rate(
     agent_id: int,
     body: AgentCommissionRateUpdate,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.update")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.update")),
 ):
     """Set a single commission rate for an agent.
     Validates: rate <= parent's rate for same category/type."""
@@ -495,7 +497,7 @@ async def set_agent_commission_rates_bulk(
     agent_id: int,
     body: AgentCommissionRateBulkUpdate,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.update")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.update")),
 ):
     """Set multiple commission rates at once. All-or-nothing validation."""
     user = await session.get(AdminUser, agent_id)
@@ -569,7 +571,7 @@ async def get_sub_agent_rates(
     agent_id: int,
     game_category: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.view")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.view")),
 ):
     """Get commission rates for all direct children of an agent.
     Useful for viewing what rates the agent has assigned to sub-agents."""

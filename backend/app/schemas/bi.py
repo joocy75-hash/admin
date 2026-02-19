@@ -1,10 +1,9 @@
 """BI Dashboard analytics schemas."""
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 
 from pydantic import BaseModel
-
 
 # ─── Revenue ────────────────────────────────────────────────────
 

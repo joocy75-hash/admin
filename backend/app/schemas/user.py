@@ -17,6 +17,8 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    model_config = {"extra": "forbid"}
+
     real_name: str | None = None
     phone: str | None = None
     email: str | None = None
@@ -24,6 +26,9 @@ class UserUpdate(BaseModel):
     color: str | None = None
     status: str | None = Field(default=None, pattern=r"^(active|suspended|banned)$")
     level: int | None = Field(default=None, ge=1, le=99)
+    commission_enabled: bool | None = None
+    commission_type: str | None = Field(default=None, pattern=r"^(rolling|losing)$")
+    losing_rate: Decimal | None = Field(default=None, ge=0, le=50)
     memo: str | None = None
 
 
@@ -55,6 +60,9 @@ class UserResponse(BaseModel):
     login_count: int = 0
     last_deposit_at: datetime | None = None
     last_bet_at: datetime | None = None
+    commission_enabled: bool = True
+    commission_type: str = "rolling"
+    losing_rate: Decimal = Decimal("0")
     memo: str | None
     last_login_at: datetime | None
     created_at: datetime
@@ -105,20 +113,20 @@ class WalletAddressResponse(BaseModel):
 
 
 class WalletAddressCreate(BaseModel):
-    coin_type: str = Field(max_length=20)
-    network: str = Field(max_length=20)
-    address: str = Field(max_length=255)
+    coin_type: str = Field(pattern=r"^(USDT|TRX|ETH|BTC|BNB)$")
+    network: str = Field(pattern=r"^(TRC20|ERC20|BEP20|BTC)$")
+    address: str = Field(min_length=10, max_length=255)
     label: str | None = None
     is_primary: bool = False
 
 
 class WalletAddressUpdate(BaseModel):
-    coin_type: str | None = None
-    network: str | None = None
-    address: str | None = None
+    coin_type: str | None = Field(default=None, pattern=r"^(USDT|TRX|ETH|BTC|BNB)$")
+    network: str | None = Field(default=None, pattern=r"^(TRC20|ERC20|BEP20|BTC)$")
+    address: str | None = Field(default=None, min_length=10, max_length=255)
     label: str | None = None
     is_primary: bool | None = None
-    status: str | None = None
+    status: str | None = Field(default=None, pattern=r"^(active|disabled)$")
 
 
 class BettingPermissionResponse(BaseModel):
@@ -128,7 +136,7 @@ class BettingPermissionResponse(BaseModel):
 
 
 class BettingPermissionUpdate(BaseModel):
-    game_category: str
+    game_category: str = Field(pattern=r"^(casino|slot|holdem|sports|shooting|coin|mini_game)$")
     is_allowed: bool
 
 
@@ -140,8 +148,8 @@ class NullBettingConfigResponse(BaseModel):
 
 
 class NullBettingConfigUpdate(BaseModel):
-    game_category: str
-    every_n_bets: int
+    game_category: str = Field(pattern=r"^(casino|slot|holdem|sports|shooting|coin|mini_game)$")
+    every_n_bets: int = Field(ge=1, le=1000)
     inherit_to_children: bool = False
 
 
@@ -153,13 +161,13 @@ class GameRollingRateResponse(BaseModel):
 
 
 class GameRollingRateUpdate(BaseModel):
-    game_category: str
+    game_category: str = Field(pattern=r"^(casino|slot|holdem|sports|shooting|coin|mini_game)$")
     provider: str | None = None
-    rolling_rate: Decimal
+    rolling_rate: Decimal = Field(ge=0, le=10)
 
 
 class PasswordSet(BaseModel):
-    new_password: str = Field(min_length=6, max_length=100)
+    new_password: str = Field(min_length=8, max_length=100)
 
 
 class UserDetailResponse(BaseModel):
@@ -182,5 +190,5 @@ class UserSummaryStats(BaseModel):
 
 
 class BulkStatusUpdate(BaseModel):
-    user_ids: list[int] = Field(min_length=1)
+    user_ids: list[int] = Field(min_length=1, max_length=100)
     status: str = Field(pattern=r"^(active|suspended|banned)$")

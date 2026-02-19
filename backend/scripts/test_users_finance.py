@@ -72,7 +72,7 @@ s, d = api("POST", "/users", {
 }, TOKEN)
 if s == 400 and "already exists" in d.get("detail", ""):
     # Already exists, find it
-    s3, d3 = api("GET", f"/users?search=test_player01", token=TOKEN)
+    s3, d3 = api("GET", "/users?search=test_player01", token=TOKEN)
     if s3 == 200 and d3["items"]:
         d = d3["items"][0]
         s = 200

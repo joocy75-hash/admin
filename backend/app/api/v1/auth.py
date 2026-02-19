@@ -1,7 +1,7 @@
 """Auth endpoints: login, logout, refresh, me, 2FA, change password."""
 
-import io
 import base64
+import io
 from datetime import datetime, timezone
 
 import pyotp
@@ -10,9 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user, get_user_permissions
 from app.config import settings
 from app.database import get_session
-from app.api.deps import get_current_user, get_user_permissions
+from app.models.admin_login_log import AdminLoginLog
 from app.models.admin_user import AdminUser
 from app.models.user_login_history import UserLoginHistory
 from app.schemas.auth import (
@@ -104,7 +105,8 @@ async def login(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
     # Update login info
-    user.last_login_at = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    user.last_login_at = now
     user.last_login_ip = request.client.host if request.client else None
     session.add(user)
 
@@ -117,9 +119,20 @@ async def login(
         device_type=_parse_device_type(ua),
         os=_parse_os(ua),
         browser=_parse_browser(ua),
-        login_at=datetime.now(timezone.utc),
+        login_at=now,
     )
     session.add(login_history)
+
+    # Record admin login log
+    admin_log = AdminLoginLog(
+        admin_user_id=user.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=ua[:500] if ua else None,
+        device=_parse_device_type(ua),
+        os=_parse_os(ua),
+        browser=_parse_browser(ua),
+    )
+    session.add(admin_log)
 
     await session.commit()
 
@@ -173,7 +186,7 @@ async def logout(
         jti = payload.get("jti")
         exp = payload.get("exp")
         if jti and exp:
-            ttl = int(exp - datetime.now().timestamp())
+            ttl = int(exp - datetime.now(timezone.utc).timestamp())
             if ttl > 0:
                 await blacklist_token(jti, ttl)
     return

@@ -7,6 +7,7 @@ import {
   rejectSettlement,
   paySettlement,
 } from '@/hooks/use-settlements';
+import { useToast } from '@/components/toast-provider';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: '초안',
@@ -25,6 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function SettlementDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const settlementId = Number(params.id);
   const { data: settlement, loading } = useSettlement(settlementId);
 
@@ -35,7 +37,7 @@ export default function SettlementDetailPage() {
       router.refresh();
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '확인 처리 실패');
+      toast.error(err instanceof Error ? err.message : '확인 처리 실패');
     }
   };
 
@@ -46,7 +48,7 @@ export default function SettlementDetailPage() {
       router.refresh();
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '거부 처리 실패');
+      toast.error(err instanceof Error ? err.message : '거부 처리 실패');
     }
   };
 
@@ -57,7 +59,7 @@ export default function SettlementDetailPage() {
       router.refresh();
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '지급 처리 실패');
+      toast.error(err instanceof Error ? err.message : '지급 처리 실패');
     }
   };
 

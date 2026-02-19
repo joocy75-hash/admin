@@ -4,15 +4,16 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field as PydanticField
-from sqlalchemy import select, func
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser
-from app.models.vip_level import VipLevel, UserLevelHistory
 from app.models.user import User
+from app.models.vip_level import UserLevelHistory, VipLevel
 
 router = APIRouter(prefix="/vip", tags=["vip"])
 

@@ -46,7 +46,6 @@ def check(name, condition):
 # ─── Ensure report permissions exist ────────────────────────────
 def ensure_permissions(token):
     """Add report.view and report.export permissions if missing."""
-    import urllib.request as ur
     # Use raw SQL via a quick endpoint isn't available, so we skip.
     # super_admin bypasses all permission checks, so tests will work.
     pass

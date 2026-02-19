@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useProviderList, deleteProvider } from '@/hooks/use-games';
+import { useToast } from '@/components/toast-provider';
 
 const CATEGORY_LABELS: Record<string, string> = {
   casino: '카지노', slot: '슬롯', mini_game: '미니게임',
@@ -10,6 +11,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function ProvidersPage() {
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
@@ -29,7 +31,7 @@ export default function ProvidersPage() {
       await deleteProvider(id);
       refetch();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제 실패');
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
     }
   };
 

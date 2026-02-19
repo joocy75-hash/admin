@@ -15,6 +15,7 @@ import {
 } from '@/hooks/use-agents';
 import { apiClient } from '@/lib/api-client';
 import { ArrowLeft, Save, KeyRound, Trash2, Network } from 'lucide-react';
+import { useToast } from '@/components/toast-provider';
 import CommissionRateTab from './commission-rate-tab';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -37,6 +38,7 @@ type Ancestor = {
 export default function AgentDetailPage() {
   const { id } = useParams();
   const router = useRouter();
+  const toast = useToast();
   const agentId = Number(id);
   const { agent, loading, error } = useAgent(agentId);
 
@@ -86,9 +88,9 @@ export default function AgentDetailPage() {
       else body.memo = null;
 
       await updateAgent(agentId, body);
-      alert('저장 완료');
+      toast.success('저장 완료');
     } catch (err) {
-      alert(err instanceof Error ? err.message : '저장 실패');
+      toast.error(err instanceof Error ? err.message : '저장 실패');
     } finally {
       setSaving(false);
     }
@@ -96,16 +98,16 @@ export default function AgentDetailPage() {
 
   const handleResetPassword = async () => {
     if (!newPassword || newPassword.length < 6) {
-      alert('비밀번호는 6자 이상이어야 합니다');
+      toast.warning('비밀번호는 6자 이상이어야 합니다');
       return;
     }
     if (!confirm('비밀번호를 초기화하시겠습니까?')) return;
     try {
       await resetAgentPassword(agentId, newPassword);
       setNewPassword('');
-      alert('비밀번호 초기화 완료');
+      toast.success('비밀번호 초기화 완료');
     } catch {
-      alert('비밀번호 초기화 실패');
+      toast.error('비밀번호 초기화 실패');
     }
   };
 
@@ -115,7 +117,7 @@ export default function AgentDetailPage() {
       await deleteAgent(agentId);
       router.push('/dashboard/agents');
     } catch {
-      alert('삭제 실패');
+      toast.error('삭제 실패');
     }
   };
 

@@ -10,6 +10,7 @@ import {
   deleteOverride,
   type CommissionPolicy,
 } from '@/hooks/use-commissions';
+import { useToast } from '@/components/toast-provider';
 
 const TYPE_LABELS: Record<string, string> = {
   rolling: '롤링',
@@ -20,6 +21,7 @@ const TYPE_LABELS: Record<string, string> = {
 export default function PolicyDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const policyId = Number(params.id);
 
   const [policy, setPolicy] = useState<CommissionPolicy | null>(null);
@@ -75,7 +77,7 @@ export default function PolicyDetailPage() {
         active,
       });
       setPolicy(updated);
-      alert('저장되었습니다');
+      toast.success('저장되었습니다');
     } catch (err) {
       setError(err instanceof Error ? err.message : '저장 실패');
     } finally {
@@ -100,7 +102,7 @@ export default function PolicyDetailPage() {
       setNewOverrideRates('');
       refetchOverrides();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '오버라이드 생성 실패');
+      toast.error(err instanceof Error ? err.message : '오버라이드 생성 실패');
     }
   };
 

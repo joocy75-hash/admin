@@ -13,6 +13,7 @@ import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from '@/components/ui/alert-dialog';
+import { useToast } from '@/components/toast-provider';
 import { AlertCircle, Percent } from 'lucide-react';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -38,6 +39,7 @@ const TYPE_BADGE_COLORS: Record<string, string> = {
 };
 
 export default function CommissionPoliciesPage() {
+  const toast = useToast();
   const [typeFilter, setTypeFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -63,7 +65,7 @@ export default function CommissionPoliciesPage() {
       await deletePolicy(pendingPolicy.id);
       refetch();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Delete failed');
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
     }
     setConfirmOpen(false);
     setPendingPolicy(null);

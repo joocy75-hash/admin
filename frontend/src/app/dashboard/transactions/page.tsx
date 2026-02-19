@@ -19,6 +19,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import { useToast } from '@/components/toast-provider';
 import { AlertCircle, Receipt, ExternalLink, Copy, Check } from 'lucide-react';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -223,6 +224,7 @@ function TxDetailDialog({ tx, open, onClose }: { tx: Transaction | null; open: b
 }
 
 export default function TransactionsPage() {
+  const toast = useToast();
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -256,7 +258,7 @@ export default function TransactionsPage() {
         await approveTransaction(id);
         refetch();
       } catch (err) {
-        alert(err instanceof Error ? err.message : 'Approve failed');
+        toast.error(err instanceof Error ? err.message : '승인 실패');
       }
     });
   };
@@ -268,7 +270,7 @@ export default function TransactionsPage() {
         await rejectTransaction(id);
         refetch();
       } catch (err) {
-        alert(err instanceof Error ? err.message : 'Reject failed');
+        toast.error(err instanceof Error ? err.message : '거부 실패');
       }
     });
   };

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSettings, updateSetting, type SettingGroup } from '@/hooks/use-settings';
+import { useToast } from '@/components/toast-provider';
 
 const GROUP_LABELS: Record<string, string> = {
   general: '일반',
@@ -16,6 +17,7 @@ const GROUP_LABELS: Record<string, string> = {
 };
 
 export default function SettingsPage() {
+  const toast = useToast();
   const { data: groups, loading, error, refetch } = useSettings();
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
@@ -48,7 +50,7 @@ export default function SettingsPage() {
       await updateSetting(group, key, value);
       refetch();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '설정 저장 실패');
+      toast.error(err instanceof Error ? err.message : '설정 저장 실패');
     } finally {
       setSavingKeys((prev) => {
         const next = new Set(prev);

@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-
 # ─── Promotion Schemas ───────────────────────────────────────────
 
 class PromotionCreate(BaseModel):

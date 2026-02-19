@@ -3,17 +3,16 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser
 from app.models.setting import Setting
 from app.schemas.backup import (
     BackupCreateResponse,
-    BackupItem,
     BackupListResponse,
     BackupSettingsResponse,
     BackupSettingsUpdate,

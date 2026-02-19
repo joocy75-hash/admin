@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUserInquiries, replyToInquiry, type Inquiry } from '@/hooks/use-user-detail';
+import { useToast } from '@/components/toast-provider';
 import { MessageSquare } from 'lucide-react';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -29,6 +30,7 @@ function toDateStr(d: Date) { return d.toISOString().slice(0, 10); }
 type Props = { userId: number };
 
 export default function TabInquiries({ userId }: Props) {
+  const toast = useToast();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -67,7 +69,7 @@ export default function TabInquiries({ userId }: Props) {
       setReplyContent('');
       setSelected(null);
       refetch();
-    } catch { alert('답변 등록 실패'); }
+    } catch { toast.error('답변 등록 실패'); }
     finally { setReplying(false); }
   };
 

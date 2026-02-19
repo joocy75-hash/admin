@@ -3,10 +3,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
-const GAME_CATEGORIES = ['casino', 'slot', 'holdem', 'sports', 'shooting', 'coin', 'minigame'];
+const GAME_CATEGORIES = ['casino', 'slot', 'holdem', 'sports', 'shooting', 'coin', 'mini_game'];
 const GAME_LABELS: Record<string, string> = {
   casino: '카지노', slot: '슬롯', holdem: '홀덤', sports: '스포츠',
-  shooting: '슈팅', coin: '코인', minigame: '미니게임',
+  shooting: '슈팅', coin: '코인', mini_game: '미니게임',
 };
 
 type Permission = {

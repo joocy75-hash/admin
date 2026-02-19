@@ -11,18 +11,21 @@ import {
   updateBettingPermission,
   updateNullBettingConfig,
   updateGameRollingRate,
+  updateCommissionSettings,
   createWalletAddress,
   deleteWalletAddress,
 } from '@/hooks/use-user-detail';
+import { Switch } from '@/components/ui/switch';
 import { Plus, Trash2, Save, Copy, Pencil } from 'lucide-react';
+import { useToast } from '@/components/toast-provider';
 import AssetSection from './asset-section';
 import RollingRateSection from './rolling-rate-section';
 import BettingPermissionSection from './betting-permission-section';
 
-const GAME_CATEGORIES = ['casino', 'slot', 'holdem', 'sports', 'shooting', 'coin', 'minigame'];
+const GAME_CATEGORIES = ['casino', 'slot', 'holdem', 'sports', 'shooting', 'coin', 'mini_game'];
 const GAME_LABELS: Record<string, string> = {
   casino: '카지노', slot: '슬롯', holdem: '홀덤', sports: '스포츠',
-  shooting: '슈팅', coin: '코인', minigame: '미니게임',
+  shooting: '슈팅', coin: '코인', mini_game: '미니게임',
 };
 
 const COIN_OPTIONS = ['USDT', 'TRX', 'ETH', 'BTC', 'BNB'];
@@ -35,6 +38,7 @@ type Props = {
 };
 
 export default function TabGeneral({ detail, userId, onRefetch }: Props) {
+  const toast = useToast();
   const { user, statistics, wallet_addresses, betting_permissions, null_betting_configs, game_rolling_rates } = detail;
 
   const [editMode, setEditMode] = useState(false);
@@ -66,7 +70,7 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
         onRefetch();
         setEditMode(false);
       }
-    } catch { alert('수정 실패'); }
+    } catch { toast.error('수정 실패'); }
     finally { setSaving(false); }
   };
 
@@ -74,7 +78,7 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
     try {
       await updateBettingPermission(userId, category, !currentAllow);
       onRefetch();
-    } catch { alert('권한 변경 실패'); }
+    } catch { toast.error('권한 변경 실패'); }
   };
 
   const handleNullBettingChange = async (category: string, value: string) => {
@@ -83,7 +87,7 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
     try {
       await updateNullBettingConfig(userId, category, n, false);
       onRefetch();
-    } catch { alert('공베팅 설정 실패'); }
+    } catch { toast.error('공베팅 설정 실패'); }
   };
 
   const handleRollingRateChange = async (category: string, value: string, provider?: string) => {
@@ -92,12 +96,23 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
     try {
       await updateGameRollingRate(userId, category, rate, provider);
       onRefetch();
-    } catch { alert('롤링율 변경 실패'); }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '롤링율 변경 실패');
+    }
+  };
+
+  const handleCommissionChange = async (data: { commission_type?: string; losing_rate?: number; commission_enabled?: boolean }) => {
+    try {
+      await updateCommissionSettings(userId, data);
+      onRefetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '커미션 설정 변경 실패');
+    }
   };
 
   const handleAddWallet = async () => {
     if (!walletForm.address) {
-      alert('지갑 주소를 입력하세요');
+      toast.warning('지갑 주소를 입력하세요');
       return;
     }
     try {
@@ -110,7 +125,7 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
       setWalletForm({ coin_type: 'USDT', network: 'TRC20', address: '', label: '' });
       setShowWalletForm(false);
       onRefetch();
-    } catch { alert('지갑 추가 실패'); }
+    } catch { toast.error('지갑 추가 실패'); }
   };
 
   const handleDeleteWallet = async (walletId: number) => {
@@ -118,11 +133,11 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
     try {
       await deleteWalletAddress(userId, walletId);
       onRefetch();
-    } catch { alert('지갑 삭제 실패'); }
+    } catch { toast.error('지갑 삭제 실패'); }
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).catch(() => {});
   };
 
   return (
@@ -134,10 +149,83 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
         totalWithdrawal={statistics.total_withdrawal}
       />
 
-      <RollingRateSection
-        rates={game_rolling_rates}
-        onRateChange={handleRollingRateChange}
-      />
+      {/* Commission Settings */}
+      <Card>
+        <CardHeader><CardTitle className="text-base">커미션 설정</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          {/* ON/OFF */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">커미션 적용</p>
+              <p className="text-xs text-muted-foreground">OFF 시 해당 회원 베팅에 커미션 미발생</p>
+            </div>
+            <Switch
+              checked={user.commission_enabled}
+              onCheckedChange={(v) => handleCommissionChange({ commission_enabled: v })}
+            />
+          </div>
+
+          {/* Rolling / Losing selector */}
+          {user.commission_enabled && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-medium mb-2">커미션 유형</p>
+                <p className="text-xs text-muted-foreground mb-2">롤링과 죽장은 동시 적용 불가</p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant={user.commission_type === 'rolling' ? 'default' : 'outline'}
+                    onClick={() => handleCommissionChange({ commission_type: 'rolling' })}
+                  >
+                    롤링 (베팅금 %)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={user.commission_type === 'losing' ? 'default' : 'outline'}
+                    onClick={() => handleCommissionChange({ commission_type: 'losing' })}
+                  >
+                    죽장 (입출금 비례)
+                  </Button>
+                </div>
+              </div>
+
+              {/* Losing rate input (single value) */}
+              {user.commission_type === 'losing' && (
+                <div className="p-3 rounded-lg border bg-muted/30">
+                  <label className="text-sm font-medium">죽장율 (%)</label>
+                  <p className="text-xs text-muted-foreground mb-2">게임 구분 없이 입출금 비례 적용 (최대 50%)</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      key={`losing-${user.losing_rate}`}
+                      type="number"
+                      className="w-24 h-8 text-center text-sm"
+                      step="0.1"
+                      min="0"
+                      max="50"
+                      defaultValue={user.losing_rate}
+                      onBlur={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val) && val >= 0 && val <= 50) {
+                          handleCommissionChange({ losing_rate: val });
+                        }
+                      }}
+                    />
+                    <span className="text-xs text-muted-foreground">/ 최대 50%</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Rolling rates table - only visible when commission_type is rolling */}
+      {user.commission_enabled && user.commission_type === 'rolling' && (
+        <RollingRateSection
+          rates={game_rolling_rates}
+          onRateChange={handleRollingRateChange}
+        />
+      )}
 
       <BettingPermissionSection
         permissions={betting_permissions}
@@ -156,6 +244,7 @@ export default function TabGeneral({ detail, userId, onRefetch }: Props) {
                 <div key={cat} className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">{GAME_LABELS[cat]}</label>
                   <Input
+                    key={`null-${cat}-${val}`}
                     type="number"
                     className="h-8 text-sm"
                     min="0"

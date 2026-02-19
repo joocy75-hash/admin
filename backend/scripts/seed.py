@@ -6,30 +6,31 @@ from pathlib import Path
 # Ensure project root is on PYTHONPATH
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import bcrypt
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+
+import bcrypt
 from sqlalchemy import create_engine, text
 from sqlmodel import Session
 
 from app.config import settings
 from app.models.admin_user import AdminUser, AdminUserTree
 from app.models.bet_record import BetRecord
+from app.models.betting_limit import BettingLimit
 from app.models.inquiry import Inquiry, InquiryReply
 from app.models.message import Message
 from app.models.money_log import MoneyLog
 from app.models.point_log import PointLog
+from app.models.promotion import Promotion
 from app.models.role import AdminUserRole, Permission, Role, RolePermission
+from app.models.transaction_limit import TransactionLimit
 from app.models.user import User, UserTree
-from app.models.user_wallet_address import UserWalletAddress
 from app.models.user_betting_permission import UserBettingPermission
 from app.models.user_game_rolling_rate import UserGameRollingRate
 from app.models.user_login_history import UserLoginHistory
 from app.models.user_null_betting_config import UserNullBettingConfig
+from app.models.user_wallet_address import UserWalletAddress
 from app.models.vip_level import VipLevel
-from app.models.transaction_limit import TransactionLimit
-from app.models.betting_limit import BettingLimit
-from app.models.promotion import Promotion
 
 
 def hash_password(password: str) -> str:
@@ -49,7 +50,7 @@ PERMISSION_MODULES = {
     "agents": ["view", "create", "update", "delete", "tree"],
     "users": ["view", "create", "update", "delete", "balance"],
     "commission": ["view", "create", "update", "delete", "settle"],
-    "settlement": ["view", "create", "confirm", "reject", "pay"],
+    "settlement": ["view", "create", "confirm", "reject", "pay", "approve"],
     "transaction": ["view", "create", "approve", "reject", "export"],
     "game": ["view", "create", "update", "delete"],
     "game_provider": ["view", "create", "update", "delete"],
@@ -62,9 +63,15 @@ PERMISSION_MODULES = {
     "monitoring": ["view"],
     "notification": ["view"],
     "partner": ["view"],
+    "attendance": ["view", "manage"],
+    "spin": ["view", "manage"],
+    "payback": ["view", "manage"],
+    "deposit_bonus": ["view", "manage"],
+    "popup": ["view", "manage"],
+    "mission": ["view", "manage"],
 }
 
-GAME_CATEGORIES = ["casino", "slot", "holdem", "sports", "shooting", "coin", "minigame"]
+GAME_CATEGORIES = ["casino", "slot", "holdem", "sports", "shooting", "coin", "mini_game"]
 
 
 def seed():

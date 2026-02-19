@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft } from 'lucide-react';
 import { useRole, usePermissions, updateRole, deleteRole, updateRolePermissions } from '@/hooks/use-roles';
+import { useToast } from '@/components/toast-provider';
 
 export default function RoleDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const roleId = Number(params.id);
 
   const { data: role, loading, error } = useRole(roleId);
@@ -107,7 +109,7 @@ export default function RoleDetailPage() {
 
   const handleDelete = async () => {
     if (role?.is_system) {
-      alert('시스템 역할은 삭제할 수 없습니다.');
+      toast.warning('시스템 역할은 삭제할 수 없습니다.');
       return;
     }
     if (!confirm('이 역할을 삭제합니다. 계속하시겠습니까?')) return;
@@ -115,7 +117,7 @@ export default function RoleDetailPage() {
       await deleteRole(roleId);
       router.push('/dashboard/roles');
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제 실패');
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
     }
   };
 

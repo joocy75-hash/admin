@@ -4,12 +4,13 @@ Revision ID: f0708e4f8bbf
 Revises: a1b2c3d4e5f6
 Create Date: 2026-02-18 15:05:23.623185
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
 import sqlmodel
 
+from alembic import op
 
 revision: str = 'f0708e4f8bbf'
 down_revision: Union[str, None] = 'a1b2c3d4e5f6'

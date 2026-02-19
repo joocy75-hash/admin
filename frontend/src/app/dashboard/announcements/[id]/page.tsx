@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft } from 'lucide-react';
 import { useAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/hooks/use-announcements';
+import { useToast } from '@/components/toast-provider';
 
 export default function AnnouncementDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const announcementId = Number(params.id);
 
   const { data: announcement, loading, error } = useAnnouncement(announcementId);
@@ -70,7 +72,7 @@ export default function AnnouncementDetailPage() {
       await deleteAnnouncement(announcementId);
       router.push('/dashboard/announcements');
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제 실패');
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
     }
   };
 

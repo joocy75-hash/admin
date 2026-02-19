@@ -3,12 +3,12 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func, case
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import PermissionChecker
 from app.config import settings
 from app.database import get_session
-from app.api.deps import PermissionChecker
 from app.models.admin_user import AdminUser
 from app.models.fraud_alert import FraudAlert
 from app.models.transaction import Transaction
@@ -173,7 +173,7 @@ async def health_check(
             await session.execute(select(1))
         checks["db"] = "ok"
     except Exception as e:
-        checks["db"] = f"error: {str(e)}"
+        checks["db"] = f"error: {e!s}"
 
     # Redis check
     try:
@@ -183,7 +183,7 @@ async def health_check(
         await r.aclose()
         checks["redis"] = "ok"
     except Exception as e:
-        checks["redis"] = f"error: {str(e)}"
+        checks["redis"] = f"error: {e!s}"
 
     all_ok = all(v == "ok" for v in checks.values())
     return HealthCheckResponse(

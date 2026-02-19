@@ -9,6 +9,7 @@ import {
   useAgentCommissionRates, useSubAgentRates, setAgentCommissionRate,
   type AgentCommissionRate,
 } from '@/hooks/use-agents';
+import { useToast } from '@/components/toast-provider';
 import { Percent } from 'lucide-react';
 
 const GAME_CATEGORIES = ['casino', 'slot', 'holdem', 'sports', 'esports', 'mini_game', 'virtual_soccer'];
@@ -28,6 +29,7 @@ type Props = {
 };
 
 export default function CommissionRateTab({ agentId, agent }: Props) {
+  const toast = useToast();
   const { rates, loading, refetch } = useAgentCommissionRates(agentId);
   const { rates: subRates, loading: subLoading, refetch: subRefetch } = useSubAgentRates(agentId);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -47,7 +49,7 @@ export default function CommissionRateTab({ agentId, agent }: Props) {
       refetch();
       subRefetch();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '요율 변경 실패');
+      toast.error(err instanceof Error ? err.message : '요율 변경 실패');
     } finally {
       setSavingKey(null);
     }

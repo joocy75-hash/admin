@@ -4,12 +4,13 @@ Revision ID: 69790b4a3500
 Revises: 7656a57c4653
 Create Date: 2026-02-18 07:53:56.456355
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
 import sqlmodel
 
+from alembic import op
 
 revision: str = '69790b4a3500'
 down_revision: Union[str, None] = '7656a57c4653'

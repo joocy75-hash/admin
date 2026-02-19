@@ -8,10 +8,12 @@ Revises: h8i9j0k1l2m3
 Create Date: 2026-02-18 23:45:00.000000
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
+
+import sqlalchemy as sa
 
 from alembic import op
-import sqlalchemy as sa
 
 revision: str = "i9j0k1l2m3n4"
 down_revision: Union[str, None] = "h8i9j0k1l2m3"

@@ -32,7 +32,7 @@ async def event_stream(token: str = Query(..., description="JWT access token")):
                     event_type = msg.get("type", "message")
                     data = json.dumps(msg.get("data", {}), default=str)
                     yield f"event: {event_type}\ndata: {data}\n\n"
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Heartbeat keepalive
                     yield ": keepalive\n\n"
         except asyncio.CancelledError:

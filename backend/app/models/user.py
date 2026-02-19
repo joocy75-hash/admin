@@ -44,6 +44,10 @@ class User(SQLModel, table=True):
     total_win: Decimal = Field(default=Decimal("0"), max_digits=18, decimal_places=2)
     login_count: int = Field(default=0)
 
+    commission_enabled: bool = Field(default=True)
+    commission_type: str = Field(default="rolling", max_length=10)  # rolling or losing
+    losing_rate: Decimal = Field(default=Decimal("0"), max_digits=5, decimal_places=2)
+
     memo: str | None = Field(default=None)
     last_login_at: datetime | None = Field(default=None)
     last_login_ip: str | None = Field(default=None, max_length=45)

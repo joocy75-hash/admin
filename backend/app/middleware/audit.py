@@ -2,10 +2,10 @@
 
 from datetime import datetime, timezone
 
+from sqlalchemy import insert
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from sqlalchemy import insert
 
 from app.database import async_session
 from app.models.audit_log import AuditLog

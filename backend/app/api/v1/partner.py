@@ -1,27 +1,27 @@
 """Partner dashboard endpoints - all data scoped to current user's subtree."""
 
-from datetime import datetime, date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser, AdminUserTree
-from app.models.user import User
 from app.models.commission import CommissionLedger
-from app.models.settlement import Settlement
 from app.models.game import GameRound
+from app.models.settlement import Settlement
+from app.models.user import User
 from app.schemas.partner import (
+    PartnerCommissionItem,
+    PartnerCommissionListResponse,
     PartnerDashboardStats,
+    PartnerSettlementItem,
+    PartnerSettlementListResponse,
     PartnerTreeNode,
     PartnerUserItem,
     PartnerUserListResponse,
-    PartnerCommissionItem,
-    PartnerCommissionListResponse,
-    PartnerSettlementItem,
-    PartnerSettlementListResponse,
 )
 from app.services.tree_service import get_descendants
 

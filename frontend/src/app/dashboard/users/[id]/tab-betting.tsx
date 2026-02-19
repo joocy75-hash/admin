@@ -12,7 +12,7 @@ import DateRangeFilter from '@/components/date-range-filter';
 
 const CATEGORY_LABELS: Record<string, string> = {
   casino: '카지노', slot: '슬롯', holdem: '홀덤', sports: '스포츠',
-  shooting: '슈팅', coin: '코인', minigame: '미니게임',
+  shooting: '슈팅', coin: '코인', mini_game: '미니게임',
 };
 const STATUS_LABELS: Record<string, string> = {
   pending: '대기', settled: '정산', cancelled: '취소', win: '당첨', lose: '낙첨',

@@ -1,9 +1,7 @@
 """SSE event publishing utilities (in-memory, no Redis dependency)."""
 
 import asyncio
-import json
 from typing import Any
-
 
 _subscribers: list[asyncio.Queue] = []
 

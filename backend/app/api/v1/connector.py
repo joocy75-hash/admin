@@ -4,14 +4,14 @@ import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.connectors import get_connector
+from app.database import get_session
 from app.models.admin_user import AdminUser
 from app.models.game import Game, GameProvider
-from app.connectors import get_connector
 from app.schemas.connector import (
     ConnectorStatusResponse,
     ConnectorTestResponse,

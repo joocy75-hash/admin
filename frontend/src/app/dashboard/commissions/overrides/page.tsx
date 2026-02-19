@@ -8,8 +8,10 @@ import {
   createOverride,
   deleteOverride,
 } from '@/hooks/use-commissions';
+import { useToast } from '@/components/toast-provider';
 
 export default function OverridesPage() {
+  const toast = useToast();
   const [agentIdFilter, setAgentIdFilter] = useState('');
   const [policyIdFilter, setPolicyIdFilter] = useState('');
 
@@ -45,7 +47,7 @@ export default function OverridesPage() {
       setShowForm(false);
       refetch();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '생성 실패');
+      toast.error(err instanceof Error ? err.message : '생성 실패');
     }
   };
 

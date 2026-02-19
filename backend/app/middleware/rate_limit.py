@@ -1,15 +1,15 @@
 """Rate limiting middleware using Redis."""
 
+import redis.asyncio as redis
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-import redis.asyncio as redis
 
 from app.config import settings
 
 # Rate limit configs per path pattern: (max_requests, window_seconds)
 RATE_LIMITS = {
-    "/api/v1/auth/login": (5, 60),
+    "/api/v1/auth/login": (10, 60),
     "/api/v1/auth/refresh": (10, 60),
     "/api/v1/commissions/webhook": (100, 60),
     "/api/v1/connectors/webhook": (100, 60),

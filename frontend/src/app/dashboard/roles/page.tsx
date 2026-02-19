@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { useRoles, deleteRole } from '@/hooks/use-roles';
+import { useToast } from '@/components/toast-provider';
 
 export default function RolesPage() {
+  const toast = useToast();
   const { data, loading, error, refetch } = useRoles();
 
   const handleDelete = async (id: number, name: string, isSystem: boolean) => {
     if (isSystem) {
-      alert('시스템 역할은 삭제할 수 없습니다.');
+      toast.warning('시스템 역할은 삭제할 수 없습니다.');
       return;
     }
     if (!confirm(`"${name}" 역할을 삭제합니다. 계속하시겠습니까?`)) return;
@@ -16,7 +18,7 @@ export default function RolesPage() {
       await deleteRole(id);
       refetch();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제 실패');
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
     }
   };
 

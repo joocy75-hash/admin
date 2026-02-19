@@ -3,11 +3,11 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser
 from app.models.game import Game, GameProvider, GameRound
 from app.models.user import User
@@ -23,7 +23,7 @@ from app.schemas.game import (
     GameRoundResponse,
     GameUpdate,
 )
-from app.services.cache_service import cache_get, cache_set, cache_delete_pattern
+from app.services.cache_service import cache_delete_pattern, cache_get, cache_set
 
 router = APIRouter(prefix="/games", tags=["games"])
 

@@ -7,12 +7,12 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import PermissionChecker
 from app.config import settings
 from app.database import get_session
-from app.api.deps import PermissionChecker
 from app.models.admin_user import AdminUser
 from app.models.commission import (
     AgentCommissionOverride,
@@ -51,7 +51,7 @@ async def list_policies(
     game_category: str | None = Query(None),
     active: bool | None = Query(None),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.view")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.view")),
 ):
     base = select(CommissionPolicy)
     if type_filter:
@@ -82,7 +82,7 @@ async def list_policies(
 async def create_policy(
     body: CommissionPolicyCreate,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.create")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.create")),
 ):
     policy = CommissionPolicy(
         name=body.name,
@@ -103,7 +103,7 @@ async def create_policy(
 async def get_policy(
     policy_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.view")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.view")),
 ):
     policy = await session.get(CommissionPolicy, policy_id)
     if not policy:
@@ -116,7 +116,7 @@ async def update_policy(
     policy_id: int,
     body: CommissionPolicyUpdate,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.update")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.update")),
 ):
     policy = await session.get(CommissionPolicy, policy_id)
     if not policy:
@@ -137,7 +137,7 @@ async def update_policy(
 async def delete_policy(
     policy_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.delete")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.delete")),
 ):
     policy = await session.get(CommissionPolicy, policy_id)
     if not policy:
@@ -166,7 +166,7 @@ async def list_overrides(
     agent_id: int | None = Query(None),
     policy_id: int | None = Query(None),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.view")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.view")),
 ):
     stmt = (
         select(
@@ -207,7 +207,7 @@ async def list_overrides(
 async def create_override(
     body: OverrideCreate,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.update")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.update")),
 ):
     # Validate agent and policy exist
     agent = await session.get(AdminUser, body.admin_user_id)
@@ -257,7 +257,7 @@ async def update_override(
     override_id: int,
     body: OverrideUpdate,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.update")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.update")),
 ):
     override = await session.get(AgentCommissionOverride, override_id)
     if not override:
@@ -291,7 +291,7 @@ async def update_override(
 async def delete_override(
     override_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.update")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.update")),
 ):
     override = await session.get(AgentCommissionOverride, override_id)
     if not override:
@@ -312,7 +312,7 @@ async def list_ledger(
     date_from: str | None = Query(None, description="YYYY-MM-DD"),
     date_to: str | None = Query(None, description="YYYY-MM-DD"),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.view")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.view")),
 ):
     base = select(CommissionLedger)
     if agent_id:
@@ -384,7 +384,7 @@ async def ledger_summary(
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
-    current_user: AdminUser = Depends(PermissionChecker("commissions.view")),
+    current_user: AdminUser = Depends(PermissionChecker("commission.view")),
 ):
     """Aggregate commission totals by type."""
     base = select(

@@ -1,8 +1,8 @@
 """Security tests for Phase 13 — rate limiting, headers, health check, CORS."""
 
 import asyncio
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -56,7 +56,7 @@ async def test_security_headers():
         resp_api = await client.get("/api/v1/auth/me")
         cache_ctrl = resp_api.headers.get("cache-control")
         if cache_ctrl == "no-store":
-            print(f"  PASS: Cache-Control = no-store (API path)")
+            print("  PASS: Cache-Control = no-store (API path)")
         else:
             print(f"  FAIL: Cache-Control expected=no-store, got={cache_ctrl}")
     print()
@@ -98,7 +98,7 @@ async def test_cors():
 
         creds = resp.headers.get("access-control-allow-credentials")
         if creds == "true":
-            print(f"  PASS: Allow-Credentials = true")
+            print("  PASS: Allow-Credentials = true")
         else:
             print(f"  FAIL: Allow-Credentials = {creds}")
     print()
@@ -120,11 +120,11 @@ async def test_rate_limit_headers():
         if limit:
             print(f"  PASS: X-RateLimit-Limit = {limit}")
         else:
-            print(f"  FAIL: X-RateLimit-Limit missing")
+            print("  FAIL: X-RateLimit-Limit missing")
         if remaining is not None:
             print(f"  PASS: X-RateLimit-Remaining = {remaining}")
         else:
-            print(f"  FAIL: X-RateLimit-Remaining missing")
+            print("  FAIL: X-RateLimit-Remaining missing")
     print()
 
 

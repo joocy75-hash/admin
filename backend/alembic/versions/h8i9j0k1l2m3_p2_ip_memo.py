@@ -9,10 +9,12 @@ Revises: g7h8i9j0k1l2
 Create Date: 2026-02-18 23:30:00.000000
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
+
+import sqlalchemy as sa
 
 from alembic import op
-import sqlalchemy as sa
 
 revision: str = "h8i9j0k1l2m3"
 down_revision: Union[str, None] = "g7h8i9j0k1l2"

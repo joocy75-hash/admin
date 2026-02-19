@@ -1,6 +1,6 @@
 """Closure Table operations for user referral hierarchy."""
 
-from sqlalchemy import delete, select, func, and_
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User, UserTree

@@ -138,7 +138,7 @@ print("\n10. Pay settlement")
 net_total = float(d.get("net_total", 0))
 s, d = api("POST", f"/settlements/{SETTLEMENT_ID}/pay", {}, TOKEN)
 check(f"Pay -> status={d.get('status')}", s == 200 and d.get("status") == "paid")
-check(f"Paid at set", d.get("paid_at") is not None)
+check("Paid at set", d.get("paid_at") is not None)
 
 # ─── Verify agent balance updated ─────────────────────────────────
 print("\n11. Verify agent balance")

@@ -10,6 +10,7 @@ import {
   exportCommissionReport,
   exportFinancialReport,
 } from '@/hooks/use-reports';
+import { useToast } from '@/components/toast-provider';
 import { Download } from 'lucide-react';
 import { formatAmount } from '@/lib/utils';
 
@@ -49,6 +50,7 @@ const PRESETS = [
 ];
 
 export default function ReportsPage() {
+  const toast = useToast();
   const [tab, setTab] = useState('agents');
   const [preset, setPreset] = useState('month');
   const [customStart, setCustomStart] = useState('');
@@ -71,7 +73,7 @@ export default function ReportsPage() {
       else if (tab === 'commissions') await exportCommissionReport(range.start, range.end);
       else await exportFinancialReport(range.start, range.end);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Export failed');
+      toast.error(err instanceof Error ? err.message : '내보내기 실패');
     } finally {
       setExporting(false);
     }

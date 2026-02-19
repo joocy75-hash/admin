@@ -13,6 +13,12 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Use useToast() from toast-provider instead of browser alert/confirm/prompt
+      "no-alert": "error",
+    },
+  },
 ]);
 
 export default eslintConfig;

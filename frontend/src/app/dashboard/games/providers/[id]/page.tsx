@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProvider, useGameList, updateProvider, deleteProvider } from '@/hooks/use-games';
+import { useToast } from '@/components/toast-provider';
 
 const CATEGORIES = [
   { value: 'casino', label: '카지노' },
@@ -23,6 +24,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 export default function ProviderDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const toast = useToast();
   const providerId = Number(params.id);
 
   const { data: provider, loading } = useProvider(providerId);
@@ -77,7 +79,7 @@ export default function ProviderDetailPage() {
       await deleteProvider(providerId);
       router.push('/dashboard/games/providers');
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제 실패');
+      toast.error(err instanceof Error ? err.message : '삭제 실패');
     }
   };
 

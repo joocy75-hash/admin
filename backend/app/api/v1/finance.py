@@ -3,11 +3,11 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
 from app.api.deps import PermissionChecker
+from app.database import get_session
 from app.models.admin_user import AdminUser
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -20,6 +20,7 @@ from app.schemas.transaction import (
     TransactionSummary,
     WithdrawalCreate,
 )
+from app.services import notification_service
 from app.services.transaction_service import (
     approve_transaction,
     create_adjustment,
@@ -27,7 +28,6 @@ from app.services.transaction_service import (
     create_withdrawal,
     reject_transaction,
 )
-from app.services import notification_service
 
 router = APIRouter(prefix="/finance", tags=["finance"])
 

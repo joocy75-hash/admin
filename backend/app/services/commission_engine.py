@@ -7,14 +7,16 @@ Hierarchy: parent assigns rates to sub-agents; sub_agent_rate <= parent_rate.
 Each agent's commission = their_rate - rate_given_to_child_in_path.
 """
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_user import AdminUser
 from app.models.agent_commission_rate import AgentCommissionRate
 from app.models.commission import CommissionLedger, CommissionPolicy
+from app.models.user import User
 from app.services.tree_service import get_ancestors
 
 
@@ -116,8 +118,22 @@ async def calculate_rolling_commission(
     - Each agent earns: their_rate - next_child_in_path_rate
     - Bottom agent (direct) earns their full rate
     """
+    # Check commission enabled + type must be rolling
+    user = await session.get(User, user_id)
+    if not user or not user.commission_enabled or user.commission_type != "rolling":
+        return []
+
     policy = await _find_policy(session, "rolling", game_category)
     if policy and bet_amount < policy.min_bet_amount:
+        return []
+
+    # Idempotency: skip if already processed for this round
+    dup_stmt = select(CommissionLedger).where(
+        CommissionLedger.reference_id == round_id,
+        CommissionLedger.user_id == user_id,
+        CommissionLedger.type == "rolling",
+    ).limit(1)
+    if (await session.execute(dup_stmt)).scalar_one_or_none():
         return []
 
     agent = await session.get(AdminUser, agent_id)
@@ -140,7 +156,7 @@ async def calculate_rolling_commission(
     rates_map = await get_agent_rates_bulk(session, all_ids, game_category, "rolling")
 
     entries = []
-    policy_id = policy.id if policy else 0
+    policy_id = policy.id if policy else None
 
     for i, agent_user in enumerate(chain):
         my_rate = rates_map.get(agent_user.id, Decimal("0"))
@@ -177,8 +193,12 @@ async def calculate_rolling_commission(
         session.add(entry)
         entries.append(entry)
 
-        agent_user.pending_balance += amount
-        session.add(agent_user)
+        # Atomic balance update to prevent race conditions
+        await session.execute(
+            sa_update(AdminUser)
+            .where(AdminUser.id == agent_user.id)
+            .values(pending_balance=AdminUser.pending_balance + amount)
+        )
 
     return entries
 
@@ -201,8 +221,22 @@ async def calculate_losing_commission(
     if loss_amount <= 0:
         return []
 
+    # Check commission enabled + type must be losing
+    user = await session.get(User, user_id)
+    if not user or not user.commission_enabled or user.commission_type != "losing":
+        return []
+
     policy = await _find_policy(session, "losing", game_category)
     if policy and bet_amount < policy.min_bet_amount:
+        return []
+
+    # Idempotency: skip if already processed for this round
+    dup_stmt = select(CommissionLedger).where(
+        CommissionLedger.reference_id == round_id,
+        CommissionLedger.user_id == user_id,
+        CommissionLedger.type == "losing",
+    ).limit(1)
+    if (await session.execute(dup_stmt)).scalar_one_or_none():
         return []
 
     agent = await session.get(AdminUser, agent_id)
@@ -223,7 +257,7 @@ async def calculate_losing_commission(
     rates_map = await get_agent_rates_bulk(session, all_ids, game_category, "losing")
 
     entries = []
-    policy_id = policy.id if policy else 0
+    policy_id = policy.id if policy else None
 
     for i, agent_user in enumerate(chain):
         my_rate = rates_map.get(agent_user.id, Decimal("0"))
@@ -259,8 +293,12 @@ async def calculate_losing_commission(
         session.add(entry)
         entries.append(entry)
 
-        agent_user.pending_balance += amount
-        session.add(agent_user)
+        # Atomic balance update to prevent race conditions
+        await session.execute(
+            sa_update(AdminUser)
+            .where(AdminUser.id == agent_user.id)
+            .values(pending_balance=AdminUser.pending_balance + amount)
+        )
 
     return entries
 
