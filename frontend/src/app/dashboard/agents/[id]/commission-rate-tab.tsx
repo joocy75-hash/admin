@@ -12,15 +12,15 @@ import {
 import { useToast } from '@/components/toast-provider';
 import { Percent } from 'lucide-react';
 
-const GAME_CATEGORIES = ['casino', 'slot', 'holdem', 'sports', 'esports', 'mini_game', 'virtual_soccer'];
+const GAME_CATEGORIES = ['casino', 'slot', 'holdem', 'sports', 'shooting', 'coin', 'mini_game'];
 const GAME_LABELS: Record<string, string> = {
   casino: '카지노',
   slot: '슬롯',
   holdem: '홀덤',
   sports: '스포츠',
-  esports: 'e스포츠',
+  shooting: '슈팅',
+  coin: '코인',
   mini_game: '미니게임',
-  virtual_soccer: '가상축구',
 };
 
 type Props = {

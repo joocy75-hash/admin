@@ -1,7 +1,7 @@
 """Report endpoints: agent, commission, financial reports with Excel export."""
 
 import io
-from datetime import date, datetime
+from datetime import date, datetime, time as time_type, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
@@ -18,7 +18,7 @@ from app.models.user import User
 from app.schemas.report import (
     AgentReportItem,
     AgentReportResponse,
-    CommissionReportByAgent,
+    CommissionReportByUser,
     CommissionReportItem,
     CommissionReportResponse,
     FinancialReportResponse,
@@ -33,11 +33,13 @@ def _parse_dates(start_date: str | None, end_date: str | None) -> tuple[datetime
     today = date.today()
     start = datetime.combine(
         datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else today.replace(day=1),
-        datetime.min.time(),
+        time_type.min,
+        tzinfo=timezone.utc,
     )
     end = datetime.combine(
         datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else today,
-        datetime.max.time(),
+        time_type.max,
+        tzinfo=timezone.utc,
     )
     return start, end
 
@@ -71,36 +73,36 @@ async def agent_report(
     user_count_result = await session.execute(user_count_stmt)
     user_count_map: dict[int, int] = {r.referrer_id: r.cnt for r in user_count_result.all()}
 
-    # Batch: total bets per agent (rolling type)
+    # Batch: total bets per agent (rolling type, via recipient_user_id)
     bets_stmt = (
         select(
-            CommissionLedger.agent_id,
+            CommissionLedger.recipient_user_id,
             func.coalesce(func.sum(CommissionLedger.source_amount), 0).label("total_bets"),
         )
         .where(
-            CommissionLedger.agent_id.in_(agent_ids),
+            CommissionLedger.recipient_user_id.in_(agent_ids),
             CommissionLedger.type == "rolling",
             CommissionLedger.created_at.between(start, end),
         )
-        .group_by(CommissionLedger.agent_id)
+        .group_by(CommissionLedger.recipient_user_id)
     )
     bets_result = await session.execute(bets_stmt)
-    bets_map: dict[int, Decimal] = {r.agent_id: Decimal(str(r.total_bets)) for r in bets_result.all()}
+    bets_map: dict[int, Decimal] = {r.recipient_user_id: Decimal(str(r.total_bets)) for r in bets_result.all()}
 
-    # Batch: total commissions per agent
+    # Batch: total commissions per agent (via recipient_user_id)
     comm_stmt = (
         select(
-            CommissionLedger.agent_id,
+            CommissionLedger.recipient_user_id,
             func.coalesce(func.sum(CommissionLedger.commission_amount), 0).label("total_comm"),
         )
         .where(
-            CommissionLedger.agent_id.in_(agent_ids),
+            CommissionLedger.recipient_user_id.in_(agent_ids),
             CommissionLedger.created_at.between(start, end),
         )
-        .group_by(CommissionLedger.agent_id)
+        .group_by(CommissionLedger.recipient_user_id)
     )
     comm_result = await session.execute(comm_stmt)
-    comm_map: dict[int, Decimal] = {r.agent_id: Decimal(str(r.total_comm)) for r in comm_result.all()}
+    comm_map: dict[int, Decimal] = {r.recipient_user_id: Decimal(str(r.total_comm)) for r in comm_result.all()}
 
     items = [
         AgentReportItem(
@@ -148,11 +150,11 @@ async def commission_report(
         for r in type_result.all()
     ]
 
-    # By agent breakdown
-    agent_result = await session.execute(
+    # By user breakdown (recipient_user_id → User)
+    user_result = await session.execute(
         select(
-            CommissionLedger.agent_id,
-            AdminUser.username,
+            CommissionLedger.recipient_user_id,
+            User.username,
             func.coalesce(func.sum(
                 case((CommissionLedger.type == "rolling", CommissionLedger.commission_amount), else_=0)
             ), 0).label("rolling_total"),
@@ -160,23 +162,23 @@ async def commission_report(
                 case((CommissionLedger.type == "losing", CommissionLedger.commission_amount), else_=0)
             ), 0).label("losing_total"),
         )
-        .join(AdminUser, AdminUser.id == CommissionLedger.agent_id)
+        .join(User, User.id == CommissionLedger.recipient_user_id)
         .where(CommissionLedger.created_at.between(start, end))
-        .group_by(CommissionLedger.agent_id, AdminUser.username)
+        .group_by(CommissionLedger.recipient_user_id, User.username)
     )
-    by_agent = [
-        CommissionReportByAgent(
-            agent_id=r.agent_id,
+    by_user = [
+        CommissionReportByUser(
+            recipient_user_id=r.recipient_user_id,
             username=r.username,
             rolling_total=r.rolling_total,
             losing_total=r.losing_total,
         )
-        for r in agent_result.all()
+        for r in user_result.all()
     ]
 
     return CommissionReportResponse(
         items=items,
-        by_agent=by_agent,
+        by_user=by_user,
         start_date=start.strftime("%Y-%m-%d"),
         end_date=end.strftime("%Y-%m-%d"),
     )
@@ -298,10 +300,10 @@ async def export_commission_report(
     current_user: AdminUser = Depends(PermissionChecker("report.export")),
 ):
     report = await commission_report(start_date, end_date, session, current_user)
-    headers = ["Agent ID", "Username", "Rolling Total", "Losing Total"]
+    headers = ["User ID", "Username", "Rolling Total", "Losing Total"]
     rows = [
-        [a.agent_id, a.username, float(a.rolling_total), float(a.losing_total)]
-        for a in report.by_agent
+        [a.recipient_user_id, a.username, float(a.rolling_total), float(a.losing_total)]
+        for a in report.by_user
     ]
     buf = _make_excel(headers, rows, "Commission Report")
     filename = f"commission_report_{report.start_date}_{report.end_date}.xlsx"

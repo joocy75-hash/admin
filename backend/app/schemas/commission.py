@@ -90,11 +90,13 @@ class OverrideResponse(BaseModel):
 class LedgerResponse(BaseModel):
     id: int
     uuid: str
-    agent_id: int
+    recipient_user_id: int
     user_id: int
-    policy_id: int | None
+    agent_id: int | None = None
+    policy_id: int | None = None
     type: str
     level: int
+    game_category: str | None = None
     source_amount: Decimal
     rate: Decimal
     commission_amount: Decimal
@@ -106,8 +108,8 @@ class LedgerResponse(BaseModel):
     description: str | None
     created_at: datetime
     # Joined fields
-    agent_username: str | None = None
-    agent_code: str | None = None
+    recipient_username: str | None = None
+    user_username: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -158,7 +160,6 @@ class AgentCommissionRateBulkUpdate(BaseModel):
 class BetWebhook(BaseModel):
     """Webhook for a new bet event — triggers rolling commission."""
     user_id: int
-    agent_id: int
     game_category: str = Field(pattern=r"^(casino|slot|holdem|sports|shooting|coin|mini_game)$")
     game_code: str | None = None
     round_id: str
@@ -168,7 +169,6 @@ class BetWebhook(BaseModel):
 class RoundResultWebhook(BaseModel):
     """Webhook for game round result — triggers losing commission on losses."""
     user_id: int
-    agent_id: int
     game_category: str = Field(pattern=r"^(casino|slot|holdem|sports|shooting|coin|mini_game)$")
     game_code: str | None = None
     round_id: str

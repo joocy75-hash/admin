@@ -57,12 +57,15 @@ async def rtp_by_game(
     if game_category:
         base = base.where(BetRecord.game_category == game_category)
     if start_date:
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        start_dt = datetime.combine(
+            datetime.strptime(start_date, "%Y-%m-%d").date(),
+            datetime.min.time(), tzinfo=timezone.utc,
+        )
         base = base.where(BetRecord.bet_at >= start_dt)
     if end_date:
         end_dt = datetime.combine(
             datetime.strptime(end_date, "%Y-%m-%d").date(),
-            datetime.max.time(),
+            datetime.max.time(), tzinfo=timezone.utc,
         )
         base = base.where(BetRecord.bet_at <= end_dt)
 
@@ -111,12 +114,15 @@ async def rtp_by_provider(
     )
 
     if start_date:
-        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        start_dt = datetime.combine(
+            datetime.strptime(start_date, "%Y-%m-%d").date(),
+            datetime.min.time(), tzinfo=timezone.utc,
+        )
         base = base.where(BetRecord.bet_at >= start_dt)
     if end_date:
         end_dt = datetime.combine(
             datetime.strptime(end_date, "%Y-%m-%d").date(),
-            datetime.max.time(),
+            datetime.max.time(), tzinfo=timezone.utc,
         )
         base = base.where(BetRecord.bet_at <= end_dt)
 

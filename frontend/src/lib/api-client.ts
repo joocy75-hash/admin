@@ -30,7 +30,22 @@ function getRefreshToken(): string | null {
   }
 }
 
+// Mutex to prevent concurrent refresh requests
+let refreshPromise: Promise<string | null> | null = null;
+
 async function tryRefresh(): Promise<string | null> {
+  // If a refresh is already in progress, wait for it
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = doRefresh();
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
+async function doRefresh(): Promise<string | null> {
   const refresh = getRefreshToken();
   if (!refresh) return null;
 

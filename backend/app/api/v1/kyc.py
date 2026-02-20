@@ -68,7 +68,7 @@ async def kyc_stats(
     result = await session.execute(status_stmt)
     by_status = {r.status: r.cnt for r in result.all()}
 
-    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_start = datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc)
     today_stmt = select(func.count()).select_from(KycDocument).where(
         KycDocument.submitted_at >= today_start
     )

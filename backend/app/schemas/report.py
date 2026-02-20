@@ -27,8 +27,8 @@ class CommissionReportItem(BaseModel):
     count: int = 0
 
 
-class CommissionReportByAgent(BaseModel):
-    agent_id: int
+class CommissionReportByUser(BaseModel):
+    recipient_user_id: int
     username: str
     rolling_total: Decimal = Decimal("0")
     losing_total: Decimal = Decimal("0")
@@ -36,7 +36,7 @@ class CommissionReportByAgent(BaseModel):
 
 class CommissionReportResponse(BaseModel):
     items: list[CommissionReportItem]
-    by_agent: list[CommissionReportByAgent]
+    by_user: list[CommissionReportByUser]
     start_date: str
     end_date: str
 

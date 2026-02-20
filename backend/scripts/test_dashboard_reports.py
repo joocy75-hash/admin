@@ -112,7 +112,7 @@ print("\n8. Commission report")
 s, d = api("GET", "/reports/commissions?start_date=2026-01-01&end_date=2026-12-31", token=TOKEN)
 check(f"Commission report -> {s}", s == 200)
 check("Has items", "items" in d)
-check("Has by_agent", "by_agent" in d)
+check("Has by_user", "by_user" in d)
 
 # ─── Financial Report ───────────────────────────────────────────
 print("\n9. Financial report")

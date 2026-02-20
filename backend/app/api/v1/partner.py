@@ -1,8 +1,13 @@
-"""Partner dashboard endpoints - all data scoped to current user's subtree."""
+"""Partner dashboard endpoints - all data scoped to current user's subtree.
 
-from datetime import date, datetime
+MLM model: AdminUser logs into admin panel, but commissions are tracked
+via recipient_user_id (User.id). We resolve AdminUser → User by username match,
+then query CommissionLedger using the User tree.
+"""
 
-from fastapi import APIRouter, Depends, Query
+from datetime import date, datetime, time as time_type, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,14 +28,25 @@ from app.schemas.partner import (
     PartnerUserItem,
     PartnerUserListResponse,
 )
-from app.services.tree_service import get_descendants
+from app.services.user_tree_service import get_descendants as get_user_descendants
 
 router = APIRouter(prefix="/partner", tags=["partner"])
 
 
-async def _get_descendant_ids(session: AsyncSession, user_id: int) -> list[int]:
-    """Get all descendant admin user IDs (excluding self)."""
-    descendants = await get_descendants(session, user_id)
+async def _resolve_user_id(session: AsyncSession, admin_user: AdminUser) -> int:
+    """Resolve AdminUser → User.id by username match."""
+    result = await session.execute(
+        select(User.id).where(User.username == admin_user.username).limit(1)
+    )
+    user_id = result.scalar_one_or_none()
+    if user_id is None:
+        raise HTTPException(status_code=404, detail="Matching user account not found")
+    return user_id
+
+
+async def _get_user_descendant_ids(session: AsyncSession, user_id: int) -> list[int]:
+    """Get all descendant User IDs (excluding self) from UserTree."""
+    descendants = await get_user_descendants(session, user_id)
     return [d["user"].id for d in descendants]
 
 
@@ -41,47 +57,49 @@ async def get_partner_dashboard(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("partner.view")),
 ) -> PartnerDashboardStats:
-    descendant_ids = await _get_descendant_ids(session, current_user.id)
-    all_ids = [current_user.id] + descendant_ids
+    user_id = await _resolve_user_id(session, current_user)
+    descendant_ids = await _get_user_descendant_ids(session, user_id)
+    all_ids = [user_id] + descendant_ids
 
     # Count sub-agents (excluding self)
     total_sub_agents = len(descendant_ids)
 
-    # Count unique users from commission ledger under this subtree
+    # Count unique bettors from commission ledger under this subtree
     total_sub_users = (await session.execute(
         select(func.count(func.distinct(CommissionLedger.user_id))).where(
-            CommissionLedger.agent_id.in_(all_ids)
+            CommissionLedger.recipient_user_id.in_(all_ids)
         )
     )).scalar() or 0
 
     # Total bet amount from commission ledger (source_amount for rolling type)
     total_bet_amount = (await session.execute(
         select(func.coalesce(func.sum(CommissionLedger.source_amount), 0)).where(
-            CommissionLedger.agent_id.in_(all_ids),
+            CommissionLedger.recipient_user_id.in_(all_ids),
             CommissionLedger.type == "rolling",
         )
     )).scalar() or 0
 
-    # Total commission earned
+    # Total commission earned (own only)
     total_commission = (await session.execute(
         select(func.coalesce(func.sum(CommissionLedger.commission_amount), 0)).where(
-            CommissionLedger.agent_id == current_user.id,
+            CommissionLedger.recipient_user_id == user_id,
         )
     )).scalar() or 0
 
     # This month's data
-    month_start = datetime.combine(date.today().replace(day=1), datetime.min.time())
+    month_start = datetime.combine(date.today().replace(day=1), time_type.min, tzinfo=timezone.utc)
 
+    # Settlement.agent_id now stores recipient_user_id
     month_settlement = (await session.execute(
         select(func.coalesce(func.sum(Settlement.net_total), 0)).where(
-            Settlement.agent_id == current_user.id,
+            Settlement.agent_id == user_id,
             Settlement.created_at >= month_start,
         )
     )).scalar() or 0
 
     month_bet_amount = (await session.execute(
         select(func.coalesce(func.sum(CommissionLedger.source_amount), 0)).where(
-            CommissionLedger.agent_id.in_(all_ids),
+            CommissionLedger.recipient_user_id.in_(all_ids),
             CommissionLedger.type == "rolling",
             CommissionLedger.created_at >= month_start,
         )
@@ -104,7 +122,7 @@ async def get_partner_tree(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("partner.view")),
 ) -> list[PartnerTreeNode]:
-    # Get full subtree including self
+    # Tree view still uses AdminUserTree (admin hierarchy display)
     stmt = (
         select(AdminUser, AdminUserTree.depth)
         .join(AdminUserTree, AdminUserTree.descendant_id == AdminUser.id)
@@ -137,13 +155,14 @@ async def get_partner_users(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("partner.view")),
 ) -> PartnerUserListResponse:
-    descendant_ids = await _get_descendant_ids(session, current_user.id)
-    all_ids = [current_user.id] + descendant_ids
+    user_id = await _resolve_user_id(session, current_user)
+    descendant_ids = await _get_user_descendant_ids(session, user_id)
+    all_ids = [user_id] + descendant_ids
 
-    # Get user IDs associated with this agent subtree via commission ledger
+    # Get bettor IDs associated with this user subtree via commission ledger
     user_ids_stmt = (
         select(func.distinct(CommissionLedger.user_id)).where(
-            CommissionLedger.agent_id.in_(all_ids)
+            CommissionLedger.recipient_user_id.in_(all_ids)
         )
     )
 
@@ -164,16 +183,16 @@ async def get_partner_users(
     users = result.scalars().all()
 
     # Batch query: get bet/win totals for all users at once
-    user_ids = [u.id for u in users]
+    fetched_user_ids = [u.id for u in users]
     stats_map: dict[int, tuple[float, float]] = {}
-    if user_ids:
+    if fetched_user_ids:
         bet_stats = (await session.execute(
             select(
                 GameRound.user_id,
                 func.coalesce(func.sum(GameRound.bet_amount), 0),
                 func.coalesce(func.sum(GameRound.win_amount), 0),
             )
-            .where(GameRound.user_id.in_(user_ids))
+            .where(GameRound.user_id.in_(fetched_user_ids))
             .group_by(GameRound.user_id)
         )).all()
         stats_map = {row[0]: (float(row[1]), float(row[2])) for row in bet_stats}
@@ -208,8 +227,10 @@ async def get_partner_commissions(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("partner.view")),
 ) -> PartnerCommissionListResponse:
+    user_id = await _resolve_user_id(session, current_user)
+
     base = select(CommissionLedger).where(
-        CommissionLedger.agent_id == current_user.id
+        CommissionLedger.recipient_user_id == user_id
     )
 
     if type_filter:
@@ -225,7 +246,7 @@ async def get_partner_commissions(
     # Total commission for filtered results
     total_comm_stmt = select(
         func.coalesce(func.sum(CommissionLedger.commission_amount), 0)
-    ).where(CommissionLedger.agent_id == current_user.id)
+    ).where(CommissionLedger.recipient_user_id == user_id)
     if type_filter:
         total_comm_stmt = total_comm_stmt.where(CommissionLedger.type == type_filter)
     if date_from:
@@ -277,8 +298,11 @@ async def get_partner_settlements(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("partner.view")),
 ) -> PartnerSettlementListResponse:
+    # Settlement.agent_id now stores recipient_user_id
+    user_id = await _resolve_user_id(session, current_user)
+
     base = select(Settlement).where(
-        Settlement.agent_id == current_user.id
+        Settlement.agent_id == user_id
     )
 
     if status_filter:

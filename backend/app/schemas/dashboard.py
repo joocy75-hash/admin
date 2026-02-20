@@ -34,8 +34,8 @@ class RecentTransaction(BaseModel):
 
 class RecentCommission(BaseModel):
     id: int
-    agent_id: int
-    agent_username: str | None = None
+    recipient_user_id: int
+    recipient_username: str | None = None
     type: str
     commission_amount: Decimal
     status: str

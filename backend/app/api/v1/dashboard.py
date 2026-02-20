@@ -160,8 +160,8 @@ async def get_recent_commissions(
     current_user: AdminUser = Depends(PermissionChecker("dashboard.view")),
 ) -> list[RecentCommission]:
     stmt = (
-        select(CommissionLedger, AdminUser.username.label("agent_username"))
-        .outerjoin(AdminUser, AdminUser.id == CommissionLedger.agent_id)
+        select(CommissionLedger, User.username.label("recipient_username"))
+        .outerjoin(User, User.id == CommissionLedger.recipient_user_id)
         .order_by(CommissionLedger.created_at.desc())
         .limit(10)
     )
@@ -171,12 +171,12 @@ async def get_recent_commissions(
     return [
         RecentCommission(
             id=cl.id,
-            agent_id=cl.agent_id,
-            agent_username=aname,
+            recipient_user_id=cl.recipient_user_id,
+            recipient_username=uname,
             type=cl.type,
             commission_amount=cl.commission_amount,
             status=cl.status,
             created_at=cl.created_at,
         )
-        for cl, aname in rows
+        for cl, uname in rows
     ]

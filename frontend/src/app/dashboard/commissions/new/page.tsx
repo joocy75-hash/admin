@@ -8,11 +8,11 @@ const GAME_CATEGORIES = [
   { value: '', label: '전체 (공통)' },
   { value: 'casino', label: '카지노' },
   { value: 'slot', label: '슬롯' },
-  { value: 'mini_game', label: '미니게임' },
-  { value: 'virtual_soccer', label: '가상축구' },
-  { value: 'sports', label: '스포츠' },
-  { value: 'esports', label: 'e스포츠' },
   { value: 'holdem', label: '홀덤' },
+  { value: 'sports', label: '스포츠' },
+  { value: 'shooting', label: '슈팅' },
+  { value: 'coin', label: '코인' },
+  { value: 'mini_game', label: '미니게임' },
 ];
 
 export default function NewPolicyPage() {

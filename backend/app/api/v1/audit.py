@@ -1,7 +1,7 @@
 """Audit log endpoints: list, detail, Excel export."""
 
 import io
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -54,12 +54,12 @@ def _parse_dates(start_date: str | None, end_date: str | None) -> tuple[datetime
     if start_date:
         start = datetime.combine(
             datetime.strptime(start_date, "%Y-%m-%d").date(),
-            datetime.min.time(),
+            datetime.min.time(), tzinfo=timezone.utc,
         )
     if end_date:
         end = datetime.combine(
             datetime.strptime(end_date, "%Y-%m-%d").date(),
-            datetime.max.time(),
+            datetime.max.time(), tzinfo=timezone.utc,
         )
     return start, end
 

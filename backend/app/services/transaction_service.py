@@ -1,6 +1,5 @@
 """Business logic for deposit, withdrawal, and balance adjustment."""
 
-import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -9,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.utils.events import publish_event
 
 
 async def create_deposit(
@@ -17,7 +15,9 @@ async def create_deposit(
     *, coin_type: str | None = None, network: str | None = None,
     tx_hash: str | None = None, wallet_address: str | None = None,
 ) -> Transaction:
-    user = await session.get(User, user_id)
+    # Lock user row to get consistent balance_before snapshot
+    user_stmt = select(User).where(User.id == user_id).with_for_update()
+    user = (await session.execute(user_stmt)).scalar_one_or_none()
     if not user:
         raise ValueError("User not found")
 
@@ -36,9 +36,6 @@ async def create_deposit(
         memo=memo,
     )
     session.add(tx)
-    asyncio.ensure_future(publish_event("new_deposit", {
-        "user_id": user_id, "amount": str(amount), "username": user.username,
-    }))
     return tx
 
 
@@ -69,14 +66,13 @@ async def create_withdrawal(
         memo=memo,
     )
     session.add(tx)
-    asyncio.ensure_future(publish_event("new_withdrawal", {
-        "user_id": user_id, "amount": str(amount), "username": user.username,
-    }))
     return tx
 
 
 async def approve_transaction(session: AsyncSession, tx_id: int, admin_id: int) -> Transaction:
-    tx = await session.get(Transaction, tx_id)
+    # Lock transaction row to prevent concurrent approve/reject race condition
+    tx_stmt = select(Transaction).where(Transaction.id == tx_id).with_for_update()
+    tx = (await session.execute(tx_stmt)).scalar_one_or_none()
     if not tx:
         raise ValueError("Transaction not found")
     if tx.status != "pending":
@@ -105,15 +101,13 @@ async def approve_transaction(session: AsyncSession, tx_id: int, admin_id: int) 
 
     session.add(tx)
     session.add(user)
-    event_type = "deposit_approved" if tx.type == "deposit" else "withdrawal_approved"
-    asyncio.ensure_future(publish_event(event_type, {
-        "tx_id": tx.id, "user_id": tx.user_id, "amount": str(tx.amount), "type": tx.type,
-    }))
     return tx
 
 
 async def reject_transaction(session: AsyncSession, tx_id: int, admin_id: int, memo: str | None = None) -> Transaction:
-    tx = await session.get(Transaction, tx_id)
+    # Lock transaction row to prevent concurrent approve/reject race condition
+    tx_stmt = select(Transaction).where(Transaction.id == tx_id).with_for_update()
+    tx = (await session.execute(tx_stmt)).scalar_one_or_none()
     if not tx:
         raise ValueError("Transaction not found")
     if tx.status != "pending":

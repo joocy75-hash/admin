@@ -263,13 +263,13 @@ async def list_salary_payments(
     if start_date:
         start_dt = datetime.combine(
             datetime.strptime(start_date, "%Y-%m-%d").date(),
-            datetime.min.time(),
+            datetime.min.time(), tzinfo=timezone.utc,
         )
         base = base.where(AgentSalaryPayment.period_start >= start_dt)
     if end_date:
         end_dt = datetime.combine(
             datetime.strptime(end_date, "%Y-%m-%d").date(),
-            datetime.max.time(),
+            datetime.max.time(), tzinfo=timezone.utc,
         )
         base = base.where(AgentSalaryPayment.period_end <= end_dt)
 

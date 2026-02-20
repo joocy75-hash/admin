@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column
+from sqlalchemy import Column, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -43,19 +43,31 @@ class AgentCommissionOverride(SQLModel, table=True):
 
 
 class CommissionLedger(SQLModel, table=True):
-    """Commission ledger - records every commission event."""
+    """Commission ledger - records every commission event.
+
+    MLM model: user_id = bettor, recipient_user_id = who earns the commission (User).
+    agent_id is kept nullable for legacy/admin-override scenarios.
+    """
 
     __tablename__ = "commission_ledger"
+    __table_args__ = (
+        UniqueConstraint("reference_id", "user_id", "type", "recipient_user_id", name="uq_ledger_idempotency"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     uuid: UUID = Field(default_factory=uuid4, unique=True)
 
-    agent_id: int = Field(foreign_key="admin_users.id", index=True)
+    # Who earns the commission (User in MLM tree, including self-rolling)
+    recipient_user_id: int = Field(foreign_key="users.id", index=True)
+    # The bettor (who placed the bet)
     user_id: int = Field(foreign_key="users.id", index=True)
+    # Legacy/admin agent reference (nullable)
+    agent_id: int | None = Field(default=None, foreign_key="admin_users.id", index=True)
     policy_id: int | None = Field(default=None, foreign_key="commission_policies.id")
 
-    type: str = Field(max_length=20, index=True)  # rolling, losing, deposit
-    level: int = Field(default=1)
+    type: str = Field(max_length=20, index=True)  # rolling, losing
+    level: int = Field(default=0)  # 0=self, 1=direct referrer, 2=grandparent, ...
+    game_category: str | None = Field(default=None, max_length=50, index=True)
 
     source_amount: Decimal = Field(max_digits=18, decimal_places=2)
     rate: Decimal = Field(max_digits=5, decimal_places=4)

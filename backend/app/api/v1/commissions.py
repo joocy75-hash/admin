@@ -19,6 +19,7 @@ from app.models.commission import (
     CommissionLedger,
     CommissionPolicy,
 )
+from app.models.user import User
 from app.schemas.commission import (
     BetWebhook,
     CommissionPolicyCreate,
@@ -302,25 +303,57 @@ async def delete_override(
 
 # ─── Commission Ledger ────────────────────────────────────────────
 
+def _build_ledger_response(ledger: CommissionLedger, recipient_username: str | None, user_username: str | None) -> LedgerResponse:
+    return LedgerResponse(
+        id=ledger.id,
+        uuid=str(ledger.uuid),
+        recipient_user_id=ledger.recipient_user_id,
+        user_id=ledger.user_id,
+        agent_id=ledger.agent_id,
+        policy_id=ledger.policy_id,
+        type=ledger.type,
+        level=ledger.level,
+        game_category=ledger.game_category,
+        source_amount=ledger.source_amount,
+        rate=ledger.rate,
+        commission_amount=ledger.commission_amount,
+        status=ledger.status,
+        reference_type=ledger.reference_type,
+        reference_id=ledger.reference_id,
+        settlement_id=ledger.settlement_id,
+        settled_at=ledger.settled_at,
+        description=ledger.description,
+        created_at=ledger.created_at,
+        recipient_username=recipient_username,
+        user_username=user_username,
+    )
+
+
 @router.get("/ledger", response_model=LedgerListResponse)
 async def list_ledger(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    agent_id: int | None = Query(None),
+    recipient_user_id: int | None = Query(None),
+    user_id: int | None = Query(None),
     type_filter: str | None = Query(None, alias="type"),
     status_filter: str | None = Query(None, alias="status"),
+    game_category: str | None = Query(None),
     date_from: str | None = Query(None, description="YYYY-MM-DD"),
     date_to: str | None = Query(None, description="YYYY-MM-DD"),
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("commission.view")),
 ):
     base = select(CommissionLedger)
-    if agent_id:
-        base = base.where(CommissionLedger.agent_id == agent_id)
+    if recipient_user_id:
+        base = base.where(CommissionLedger.recipient_user_id == recipient_user_id)
+    if user_id:
+        base = base.where(CommissionLedger.user_id == user_id)
     if type_filter:
         base = base.where(CommissionLedger.type == type_filter)
     if status_filter:
         base = base.where(CommissionLedger.status == status_filter)
+    if game_category:
+        base = base.where(CommissionLedger.game_category == game_category)
     if date_from:
         base = base.where(CommissionLedger.created_at >= datetime.fromisoformat(f"{date_from}T00:00:00"))
     if date_to:
@@ -329,14 +362,20 @@ async def list_ledger(
     count_stmt = select(func.count()).select_from(base.subquery())
     total = (await session.execute(count_stmt)).scalar() or 0
 
-    # Total commission sum
     sum_stmt = select(func.coalesce(func.sum(CommissionLedger.commission_amount), 0)).select_from(base.subquery())
     total_commission = (await session.execute(sum_stmt)).scalar() or Decimal("0")
 
-    # Paginated results with agent join
+    # Alias for recipient and bettor user joins
+    RecipientUser = User.__table__.alias("recipient_user")
+    BettorUser = User.__table__.alias("bettor_user")
+
     stmt = (
-        base.join(AdminUser, AdminUser.id == CommissionLedger.agent_id, isouter=True)
-        .add_columns(AdminUser.username, AdminUser.agent_code)
+        base.join(RecipientUser, RecipientUser.c.id == CommissionLedger.recipient_user_id, isouter=True)
+        .join(BettorUser, BettorUser.c.id == CommissionLedger.user_id, isouter=True)
+        .add_columns(
+            RecipientUser.c.username.label("recipient_username"),
+            BettorUser.c.username.label("user_username"),
+        )
         .order_by(CommissionLedger.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
@@ -344,30 +383,7 @@ async def list_ledger(
     result = await session.execute(stmt)
     rows = result.all()
 
-    items = []
-    for row in rows:
-        ledger = row[0]
-        items.append(LedgerResponse(
-            id=ledger.id,
-            uuid=str(ledger.uuid),
-            agent_id=ledger.agent_id,
-            user_id=ledger.user_id,
-            policy_id=ledger.policy_id,
-            type=ledger.type,
-            level=ledger.level,
-            source_amount=ledger.source_amount,
-            rate=ledger.rate,
-            commission_amount=ledger.commission_amount,
-            status=ledger.status,
-            reference_type=ledger.reference_type,
-            reference_id=ledger.reference_id,
-            settlement_id=ledger.settlement_id,
-            settled_at=ledger.settled_at,
-            description=ledger.description,
-            created_at=ledger.created_at,
-            agent_username=row[1],
-            agent_code=row[2],
-        ))
+    items = [_build_ledger_response(row[0], row[1], row[2]) for row in rows]
 
     return LedgerListResponse(
         items=items,
@@ -380,7 +396,9 @@ async def list_ledger(
 
 @router.get("/ledger/summary", response_model=list[LedgerSummary])
 async def ledger_summary(
-    agent_id: int | None = Query(None),
+    recipient_user_id: int | None = Query(None),
+    user_id: int | None = Query(None),
+    game_category: str | None = Query(None),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
@@ -392,8 +410,12 @@ async def ledger_summary(
         func.sum(CommissionLedger.commission_amount).label("total_amount"),
         func.count().label("count"),
     )
-    if agent_id:
-        base = base.where(CommissionLedger.agent_id == agent_id)
+    if recipient_user_id:
+        base = base.where(CommissionLedger.recipient_user_id == recipient_user_id)
+    if user_id:
+        base = base.where(CommissionLedger.user_id == user_id)
+    if game_category:
+        base = base.where(CommissionLedger.game_category == game_category)
     if date_from:
         base = base.where(CommissionLedger.created_at >= datetime.fromisoformat(f"{date_from}T00:00:00"))
     if date_to:
@@ -462,13 +484,17 @@ async def receive_bet_webhook(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    """Receive bet event from game backend. Generates rolling commissions."""
+    """Receive bet event from game backend. Generates rolling commissions.
+
+    MLM model: user_id is the bettor. Commission is distributed to the bettor
+    (self-rolling) and all ancestors in the referral tree (waterfall).
+    """
     await _verify_webhook_signature(request)
 
-    # Verify agent exists
-    agent = await session.get(AdminUser, body.agent_id)
-    if not agent:
-        raise HTTPException(status_code=400, detail="Agent not found")
+    # Verify user exists
+    user = await session.get(User, body.user_id)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
 
     # Check duplicate round_id
     existing = await session.execute(
@@ -484,7 +510,6 @@ async def receive_bet_webhook(
 
     entries = await calculate_rolling_commission(
         session=session,
-        agent_id=body.agent_id,
         user_id=body.user_id,
         game_category=body.game_category,
         bet_amount=body.bet_amount,
@@ -506,12 +531,15 @@ async def receive_round_result_webhook(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ):
-    """Receive game round result from game backend. Generates losing commissions on losses."""
+    """Receive game round result from game backend. Generates losing commissions on losses.
+
+    MLM model: user_id is the bettor. Losing commission distributed via waterfall.
+    """
     await _verify_webhook_signature(request)
 
-    agent = await session.get(AdminUser, body.agent_id)
-    if not agent:
-        raise HTTPException(status_code=400, detail="Agent not found")
+    user = await session.get(User, body.user_id)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
 
     if body.result != "lose":
         return {"detail": "No losing commission (not a loss)", "entries": 0}
@@ -530,7 +558,6 @@ async def receive_round_result_webhook(
 
     entries = await calculate_losing_commission(
         session=session,
-        agent_id=body.agent_id,
         user_id=body.user_id,
         game_category=body.game_category,
         bet_amount=body.bet_amount,

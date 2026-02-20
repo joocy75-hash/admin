@@ -1,9 +1,11 @@
+import warnings
+
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+asyncpg://admin:admin1234@localhost:5432/admin_panel"
-    DATABASE_URL_SYNC: str = "postgresql://admin:admin1234@localhost:5432/admin_panel"
+    DATABASE_URL: str = "postgresql+asyncpg://admin:admin1234@localhost:5433/admin_panel"
+    DATABASE_URL_SYNC: str = "postgresql://admin:admin1234@localhost:5433/admin_panel"
     REDIS_URL: str = "redis://localhost:6379/0"
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
@@ -18,7 +20,18 @@ class Settings(BaseSettings):
     TELEGRAM_CHAT_ID: str = ""
     WEBHOOK_SECRET: str = ""
 
+    # DB connection pool
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_RECYCLE: int = 3600
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
 settings = Settings()
+
+if settings.ENV == "production" and settings.SECRET_KEY == "dev-secret-key-change-in-production":
+    raise RuntimeError("SECRET_KEY must be changed in production. Set SECRET_KEY environment variable.")
+
+if settings.ENV != "production" and settings.SECRET_KEY == "dev-secret-key-change-in-production":
+    warnings.warn("Using default SECRET_KEY. Set SECRET_KEY env var for production.", stacklevel=1)

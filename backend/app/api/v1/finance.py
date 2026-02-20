@@ -1,6 +1,6 @@
 """Finance/Transaction management endpoints."""
 
-from datetime import datetime
+from datetime import datetime, time as time_type, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
@@ -21,6 +21,7 @@ from app.schemas.transaction import (
     WithdrawalCreate,
 )
 from app.services import notification_service
+from app.utils.events import publish_event
 from app.services.transaction_service import (
     approve_transaction,
     create_adjustment,
@@ -61,6 +62,54 @@ async def _build_response(session: AsyncSession, tx: Transaction) -> Transaction
     )
 
 
+async def _batch_build_responses(
+    session: AsyncSession, transactions: list[Transaction],
+) -> list[TransactionResponse]:
+    """Batch-load users and processors to avoid N+1 queries."""
+    if not transactions:
+        return []
+    user_ids = list({t.user_id for t in transactions})
+    processor_ids = list({t.processed_by for t in transactions if t.processed_by})
+
+    users_result = await session.execute(select(User).where(User.id.in_(user_ids)))
+    users_map = {u.id: u for u in users_result.scalars().all()}
+
+    processors_map: dict[int, AdminUser] = {}
+    if processor_ids:
+        proc_result = await session.execute(select(AdminUser).where(AdminUser.id.in_(processor_ids)))
+        processors_map = {p.id: p for p in proc_result.scalars().all()}
+
+    items = []
+    for tx in transactions:
+        user = users_map.get(tx.user_id)
+        processor = processors_map.get(tx.processed_by) if tx.processed_by else None
+        items.append(TransactionResponse(
+            id=tx.id,
+            uuid=str(tx.uuid),
+            user_id=tx.user_id,
+            user_username=user.username if user else None,
+            type=tx.type,
+            action=tx.action,
+            amount=tx.amount,
+            balance_before=tx.balance_before,
+            balance_after=tx.balance_after,
+            status=tx.status,
+            coin_type=tx.coin_type,
+            network=tx.network,
+            tx_hash=tx.tx_hash,
+            wallet_address=tx.wallet_address,
+            confirmations=tx.confirmations,
+            reference_type=tx.reference_type,
+            reference_id=tx.reference_id,
+            memo=tx.memo,
+            processed_by=tx.processed_by,
+            processed_by_username=processor.username if processor else None,
+            processed_at=tx.processed_at,
+            created_at=tx.created_at,
+        ))
+    return items
+
+
 # ─── List Transactions ─────────────────────────────────────────────
 
 @router.get("/transactions", response_model=TransactionListResponse)
@@ -85,13 +134,15 @@ async def list_transactions(
     if start_date:
         start_dt = datetime.combine(
             datetime.strptime(start_date, "%Y-%m-%d").date(),
-            datetime.min.time(),
+            time_type.min,
+            tzinfo=timezone.utc,
         )
         base = base.where(Transaction.created_at >= start_dt)
     if end_date:
         end_dt = datetime.combine(
             datetime.strptime(end_date, "%Y-%m-%d").date(),
-            datetime.max.time(),
+            time_type.max,
+            tzinfo=timezone.utc,
         )
         base = base.where(Transaction.created_at <= end_dt)
 
@@ -107,7 +158,7 @@ async def list_transactions(
     result = await session.execute(stmt)
     transactions = result.scalars().all()
 
-    items = [await _build_response(session, t) for t in transactions]
+    items = await _batch_build_responses(session, list(transactions))
     return TransactionListResponse(
         items=items, total=total, page=page, page_size=page_size, total_amount=total_amount,
     )
@@ -172,6 +223,9 @@ async def request_deposit(
         resp = await _build_response(session, tx)
         user = await session.get(User, body.user_id)
         coin = body.coin_type or "USDT"
+        await publish_event("new_deposit", {
+            "user_id": body.user_id, "amount": str(body.amount), "username": user.username,
+        })
         notification_service.notify_deposit_request(user.username, body.amount, coin)
         notification_service.notify_large_transaction("deposit", user.username, body.amount, coin)
         return resp
@@ -198,6 +252,9 @@ async def request_withdrawal(
         resp = await _build_response(session, tx)
         user = await session.get(User, body.user_id)
         coin = body.coin_type or "USDT"
+        await publish_event("new_withdrawal", {
+            "user_id": body.user_id, "amount": str(body.amount), "username": user.username,
+        })
         notification_service.notify_withdrawal_request(user.username, body.amount, coin)
         notification_service.notify_large_transaction("withdrawal", user.username, body.amount, coin)
         return resp
@@ -238,6 +295,10 @@ async def approve_tx(
         await session.refresh(tx)
         resp = await _build_response(session, tx)
         user = await session.get(User, tx.user_id)
+        event_type = "deposit_approved" if tx.type == "deposit" else "withdrawal_approved"
+        await publish_event(event_type, {
+            "tx_id": tx.id, "user_id": tx.user_id, "amount": str(tx.amount), "type": tx.type,
+        })
         notification_service.notify_transaction_approved(tx.type, user.username, tx.amount, tx.coin_type or "USDT")
         return resp
     except ValueError as e:

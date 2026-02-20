@@ -125,7 +125,7 @@ async def revenue_trend(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("report.view")),
 ):
-    start = datetime.combine(date.today() - timedelta(days=days - 1), datetime.min.time())
+    start = datetime.combine(date.today() - timedelta(days=days - 1), datetime.min.time(), tzinfo=timezone.utc)
 
     stmt = select(
         func.date(Transaction.created_at).label("day"),
@@ -215,12 +215,12 @@ async def user_cohort(
         for _ in range(i):
             ref = (ref - timedelta(days=1)).replace(day=1)
 
-        month_start = datetime.combine(ref, datetime.min.time())
+        month_start = datetime.combine(ref, datetime.min.time(), tzinfo=timezone.utc)
         if ref.month == 12:
             next_month = ref.replace(year=ref.year + 1, month=1, day=1)
         else:
             next_month = ref.replace(month=ref.month + 1, day=1)
-        month_end = datetime.combine(next_month, datetime.min.time())
+        month_end = datetime.combine(next_month, datetime.min.time(), tzinfo=timezone.utc)
 
         reg_stmt = select(User.id).where(
             User.created_at >= month_start, User.created_at < month_end
@@ -245,14 +245,14 @@ async def user_cohort(
                     check_ref = check_ref.replace(year=check_ref.year + 1, month=1)
                 else:
                     check_ref = check_ref.replace(month=check_ref.month + 1)
-            c_start = datetime.combine(check_ref, datetime.min.time())
+            c_start = datetime.combine(check_ref, datetime.min.time(), tzinfo=timezone.utc)
             if check_ref.month == 12:
                 c_next = check_ref.replace(year=check_ref.year + 1, month=1, day=1)
             else:
                 c_next = check_ref.replace(month=check_ref.month + 1, day=1)
-            c_end = datetime.combine(c_next, datetime.min.time())
+            c_end = datetime.combine(c_next, datetime.min.time(), tzinfo=timezone.utc)
 
-            if c_start > datetime.combine(today, datetime.min.time()):
+            if c_start > datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc):
                 pcts.append(0.0)
                 continue
 
@@ -292,13 +292,15 @@ async def game_performance(
     if start_date:
         base_filters.append(
             BetRecord.bet_at >= datetime.combine(
-                datetime.strptime(start_date, "%Y-%m-%d").date(), datetime.min.time()
+                datetime.strptime(start_date, "%Y-%m-%d").date(),
+                datetime.min.time(), tzinfo=timezone.utc,
             )
         )
     if end_date:
         base_filters.append(
             BetRecord.bet_at <= datetime.combine(
-                datetime.strptime(end_date, "%Y-%m-%d").date(), datetime.max.time()
+                datetime.strptime(end_date, "%Y-%m-%d").date(),
+                datetime.max.time(), tzinfo=timezone.utc,
             )
         )
 
@@ -358,22 +360,24 @@ async def agent_performance(
     if start_date:
         comm_filters.append(
             CommissionLedger.created_at >= datetime.combine(
-                datetime.strptime(start_date, "%Y-%m-%d").date(), datetime.min.time()
+                datetime.strptime(start_date, "%Y-%m-%d").date(),
+                datetime.min.time(), tzinfo=timezone.utc,
             )
         )
     if end_date:
         comm_filters.append(
             CommissionLedger.created_at <= datetime.combine(
-                datetime.strptime(end_date, "%Y-%m-%d").date(), datetime.max.time()
+                datetime.strptime(end_date, "%Y-%m-%d").date(),
+                datetime.max.time(), tzinfo=timezone.utc,
             )
         )
 
     comm_stmt = select(
-        CommissionLedger.agent_id,
+        CommissionLedger.recipient_user_id,
         func.coalesce(func.sum(CommissionLedger.commission_amount), ZERO).label("commission_earned"),
-    ).where(*comm_filters).group_by(CommissionLedger.agent_id)
+    ).where(*comm_filters).group_by(CommissionLedger.recipient_user_id)
     comm_result = await session.execute(comm_stmt)
-    comm_map = {r.agent_id: r.commission_earned for r in comm_result.all()}
+    comm_map = {r.recipient_user_id: r.commission_earned for r in comm_result.all()}
 
     # Get all agents
     agents_stmt = select(AdminUser).where(AdminUser.status == "active").limit(limit)
@@ -407,8 +411,8 @@ async def executive_overview(
     session: AsyncSession = Depends(get_session),
     current_user: AdminUser = Depends(PermissionChecker("report.view")),
 ):
-    today_start = datetime.combine(date.today(), datetime.min.time())
-    today_end = datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
+    today_start = datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc)
+    today_end = datetime.combine(date.today() + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
 
     # Total users
     total_users = (await session.execute(
